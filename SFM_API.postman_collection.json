@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "SFM API - Sampling Management",
+    "description": "API collection for testing SFM (Structured Fish Management) API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "default-api-key",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Get All Cages",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/cages?key={{api_key}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "cages"],
+          "query": [
+            {
+              "key": "key",
+              "value": "{{api_key}}",
+              "description": "API authentication key"
+            }
+          ]
+        },
+        "description": "Returns all cages with their associated samplings, investors, and feed types."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Calculate Weight from Dimensions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"height\": 10,\n  \"width\": 5,\n  \"sampling_id\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/weight?key={{api_key}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "weight"],
+          "query": [
+            {
+              "key": "key",
+              "value": "{{api_key}}",
+              "description": "API authentication key"
+            }
+          ]
+        },
+        "description": "Calculates fish weight from height and width measurements."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Next Sample to Measure",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sampling_id\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/sampling/calculate?key={{api_key}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "sampling", "calculate"],
+          "query": [
+            {
+              "key": "key",
+              "value": "{{api_key}}",
+              "description": "API authentication key"
+            }
+          ]
+        },
+        "description": "Retrieves the next unfilled sample that needs to be measured."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Get Sampling Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/sampling/1?key={{api_key}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "sampling", "1"],
+          "query": [
+            {
+              "key": "key",
+              "value": "{{api_key}}",
+              "description": "API authentication key"
+            }
+          ]
+        },
+        "description": "Returns detailed information about a specific sampling session."
+      },
+      "response": []
+    },
+    {
+      "name": "Errors",
+      "item": [
+        {
+          "name": "Missing API Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/cages",
+              "host": ["{{base_url}}"],
+              "path": ["api", "cages"]
+            },
+            "description": "Test error response when API key is missing"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid API Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/cages?key=invalid-key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "cages"],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "invalid-key"
+                }
+              ]
+            },
+            "description": "Test error response when API key is invalid"
+          },
+          "response": []
+        },
+        {
+          "name": "Missing Required Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"height\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/weight?key={{api_key}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "weight"],
+              "query": [
+                {
+                  "key": "key",
+                  "value": "{{api_key}}"
+                }
+              ]
+            },
+            "description": "Test validation error when required fields are missing"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+
