@@ -12,7 +12,7 @@ import {
     Filler,
 } from 'chart.js';
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
-import * as tf from '@tensorflow/tfjs';
+import type * as tfTypes from '@tensorflow/tfjs';
 
 ChartJS.register(
     Title,
@@ -149,24 +149,32 @@ const isTraining = ref(false);
 const predictionDays = ref(7); // Predict 7 days ahead
 const showPredictions = ref(true);
 
-// Load TensorFlow.js model
-let model: tf.LayersModel | null = null;
+// Load TensorFlow.js lazily
+let tf: typeof tfTypes | null = null;
+let model: tfTypes.LayersModel | null = null;
 
-const createModel = () => {
-    const newModel = tf.sequential({
+const loadTensorFlow = async () => {
+    if (!tf) {
+        tf = await import('@tensorflow/tfjs');
+    }
+    return tf;
+};
+
+const createModel = (tfInstance: typeof tfTypes) => {
+    const newModel = tfInstance.sequential({
         layers: [
-            tf.layers.dense({
+            tfInstance.layers.dense({
                 inputShape: [5],
                 units: 10,
                 activation: 'relu',
             }),
-            tf.layers.dropout({ rate: 0.2 }),
-            tf.layers.dense({
+            tfInstance.layers.dropout({ rate: 0.2 }),
+            tfInstance.layers.dense({
                 units: 10,
                 activation: 'relu',
             }),
-            tf.layers.dropout({ rate: 0.2 }),
-            tf.layers.dense({
+            tfInstance.layers.dropout({ rate: 0.2 }),
+            tfInstance.layers.dense({
                 units: 1,
                 activation: 'linear',
             }),
@@ -174,7 +182,7 @@ const createModel = () => {
     });
 
     newModel.compile({
-        optimizer: tf.train.adam(0.001),
+        optimizer: tfInstance.train.adam(0.001),
         loss: 'meanSquaredError',
         metrics: ['mae'],
     });
@@ -183,7 +191,7 @@ const createModel = () => {
 };
 
 // Prepare data for training
-const prepareData = (data: number[]) => {
+const prepareData = (tfInstance: typeof tfTypes, data: number[]) => {
     if (data.length < 5) return null;
 
     const X: number[][] = [];
@@ -195,17 +203,17 @@ const prepareData = (data: number[]) => {
     }
 
     return {
-        X: tf.tensor2d(X),
-        y: tf.tensor2d(y, [y.length, 1]),
+        X: tfInstance.tensor2d(X),
+        y: tfInstance.tensor2d(y, [y.length, 1]),
     };
 };
 
 // Train model for sampling counts
-const trainSamplingModel = async (data: number[]) => {
-    const prepared = prepareData(data);
+const trainSamplingModel = async (tfInstance: typeof tfTypes, data: number[]) => {
+    const prepared = prepareData(tfInstance, data);
     if (!prepared) return null;
 
-    model = createModel();
+    model = createModel(tfInstance);
     isTraining.value = true;
 
     try {
@@ -235,15 +243,15 @@ const trainSamplingModel = async (data: number[]) => {
 };
 
 // Predict future values
-const predictFuture = async (data: number[], days: number) => {
+const predictFuture = async (tfInstance: typeof tfTypes, data: number[], days: number) => {
     if (!model || data.length < 5) return [];
 
     const predictions: number[] = [];
     let lastSequence = data.slice(-5);
 
     for (let i = 0; i < days; i++) {
-        const input = tf.tensor2d([lastSequence]);
-        const prediction = model.predict(input) as tf.Tensor;
+        const input = tfInstance.tensor2d([lastSequence]);
+        const prediction = model.predict(input) as tfTypes.Tensor;
         const value = await prediction.data();
         const predictedValue = Math.max(0, value[0]); // Ensure non-negative
 
@@ -318,10 +326,12 @@ const processChartData = async () => {
         isTraining.value = true;
         
         try {
+            const tfInstance = await loadTensorFlow();
+
             // Train model and predict for sampling counts
-            const samplingModel = await trainSamplingModel(counts);
+            const samplingModel = await trainSamplingModel(tfInstance, counts);
             if (samplingModel) {
-                const countPredictions = await predictFuture(counts, predictionDays.value);
+                const countPredictions = await predictFuture(tfInstance, counts, predictionDays.value);
                 const futureDates = generateFutureDates(
                     props.trends[props.trends.length - 1].date,
                     predictionDays.value
@@ -348,9 +358,9 @@ const processChartData = async () => {
             }
 
             // Train model and predict for weights
-            const weightModel = await trainSamplingModel(weights);
+            const weightModel = await trainSamplingModel(tfInstance, weights);
             if (weightModel) {
-                const weightPredictions = await predictFuture(weights, predictionDays.value);
+                const weightPredictions = await predictFuture(tfInstance, weights, predictionDays.value);
                 
                 datasets.push({
                     label: 'Predicted Avg Weight (g)',
