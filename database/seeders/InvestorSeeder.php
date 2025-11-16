@@ -84,7 +84,18 @@ class InvestorSeeder extends Seeder
             ], $investorData);
         }
 
+        // Seed a soft-deleted investor sample for testing archives/restore flows
+        $archived = Investor::firstOrCreate([
+            'name' => 'Archived Investor',
+        ], [
+            'phone' => '09000000000',
+            'address' => 'Archived Address, Philippines',
+        ]);
+        if (is_null($archived->deleted_at)) {
+            $archived->delete();
+        }
+
         $this->command->info('Investors seeded successfully!');
-        $this->command->info('Created ' . count($investors) . ' specific investors and 12 random investors.');
+        $this->command->info('Created ' . count($investors) . ' specific investors and 12 random investors, plus 1 archived investor.');
     }
 }

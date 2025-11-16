@@ -75,6 +75,21 @@ class CageController extends Controller
 
     public function destroy(Cage $cage)
     {
+        // Clean up related records to avoid foreign key constraint errors
+        // Delete feed consumptions linked to this cage
+        $cage->feedConsumptions()->delete();
+
+        // Delete all feeding schedules for this cage
+        $cage->feedingSchedules()->delete();
+
+        // Delete related samplings and their samples
+        $samplings = $cage->samplings()->with('samples')->get();
+        foreach ($samplings as $sampling) {
+            $sampling->samples()->delete();
+            $sampling->delete();
+        }
+
+        // Finally delete the cage itself
         $cage->delete();
 
         return response()->json([

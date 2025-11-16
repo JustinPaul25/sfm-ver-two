@@ -24,7 +24,10 @@ class ReportsController extends Controller
 
     public function overall(Request $request)
     {
-        $query = Sampling::with(['investor', 'samples']);
+        $query = Sampling::with(['investor', 'samples'])
+            ->whereHas('investor', function($q) {
+                $q->whereNull('deleted_at');
+            });
 
         // Apply filters
         if ($request->filled('investor_id')) {
@@ -61,7 +64,10 @@ class ReportsController extends Controller
 
     public function exportExcel(Request $request)
     {
-        $query = Sampling::with(['investor', 'samples']);
+        $query = Sampling::with(['investor', 'samples'])
+            ->whereHas('investor', function($q) {
+                $q->whereNull('deleted_at');
+            });
 
         // Apply same filters as the view
         if ($request->filled('investor_id')) {

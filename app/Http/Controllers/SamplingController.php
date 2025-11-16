@@ -18,7 +18,11 @@ class SamplingController extends Controller
 
     public function list(Request $request)
     {
-        $query = Sampling::with('investor')->withCount('samples');
+        $query = Sampling::with('investor')->withCount('samples')
+            // Hide samplings whose investor has been soft-deleted
+            ->whereHas('investor', function($q) {
+                $q->whereNull('deleted_at');
+            });
 
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -98,6 +102,9 @@ class SamplingController extends Controller
 
     public function destroy(Sampling $sampling)
     {
+        // Delete related samples first to satisfy foreign key constraints
+        $sampling->samples()->delete();
+
         $sampling->delete();
 
         return response()->json([
@@ -111,7 +118,11 @@ class SamplingController extends Controller
         
         if ($samplingId) {
             // Get specific sampling data with cage information
-            $sampling = Sampling::with(['investor', 'samples'])->find($samplingId);
+            $sampling = Sampling::with(['investor', 'samples'])
+                ->whereHas('investor', function($q) {
+                    $q->whereNull('deleted_at');
+                })
+                ->find($samplingId);
             
             if ($sampling) {
                 // Get cage information for accurate biomass calculation
