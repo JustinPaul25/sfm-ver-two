@@ -82,8 +82,9 @@ export const useInvestorStore = defineStore('investor', () => {
             const response = await axios.delete(route('investors.destroy', id));
             return response.data;
         } catch (e) {
-            error.value = e.message;
-            throw e;
+            const message = e?.response?.data?.message || e.message;
+            error.value = message;
+            throw new Error(message);
         } finally {
             loading.value = false;
         }
