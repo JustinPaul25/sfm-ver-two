@@ -16,34 +16,29 @@ const props = defineProps<{
 
 // Reactive data
 const report = ref({
-  date: props.sampling?.date || '22-Jan-25',
-  investor: props.sampling?.investor || 'Saline Tilapia Demo cage',
-  cageNo: props.sampling?.cageNo || '1',
-  doc: props.sampling?.doc || '54',
+  date: props.sampling?.date || '',
+  investor: props.sampling?.investor || '',
+  cageNo: props.sampling?.cageNo || '',
+  doc: props.sampling?.doc || '',
   samples: props.samples || [],
   totals: props.totals || {
-    totalWeight: 6752,
-    totalSamples: 30,
-    avgWeight: 225,
-    totalStocks: 5000,
-    mortality: 30,
-    presentStocks: 5000,
-    biomass: 1127,
-    feedingRate: 3,
-    dailyFeedRation: 32,
-    feedConsumption: 1080,
-    prevABW: 161,
-    prevBiomass: 803,
-    totalWtGained: 304,
-    dailyWtGained: 1.1,
-    fcr: 2.0,
+    totalWeight: 0,
+    totalSamples: 0,
+    avgWeight: 0,
+    totalStocks: 0,
+    mortality: 0,
+    presentStocks: 0,
+    biomass: 0,
+    feedingRate: 0,
+    dailyFeedRation: 0,
+    feedConsumption: 0,
+    prevABW: 0,
+    prevBiomass: 0,
+    totalWtGained: 0,
+    dailyWtGained: 0,
+    fcr: 0,
   },
-  history: props.history || [
-    { date: '05-Sep-24', doc: 1, stocks: 5000, mortality: 0, present: 5000, abw: 8, wtInc: 8, doc2: 1, biomass: 40, fr: '8%', dfr: 40, feed: 17, totalGained: 0, fcr: 0 },
-    { date: 'Oct 25, 2024', doc: 52, stocks: 5000, mortality: 12, present: 4988, abw: 48, wtInc: 40, doc2: 40, biomass: 239, fr: '5%', dfr: 12, feed: 330, totalGained: 199, fcr: 1.7 },
-    { date: 'Nov 29, 2024', doc: 112, stocks: 5000, mortality: 30, present: 5000, abw: 161, wtInc: 41, doc2: 113, biomass: 803, fr: '4%', dfr: 32, feed: 375, totalGained: 304, fcr: 2.0 },
-    { date: 'Jan 22, 2025', doc: 176, stocks: 5000, mortality: 30, present: 5000, abw: 225, wtInc: 64, doc2: 176, biomass: 1127, fr: '3%', dfr: 32, feed: 1080, totalGained: 324, fcr: 2.0 },
-  ],
+  history: props.history || [],
 });
 
 // Helper function to round to nearest tenth (1 decimal place)
@@ -56,24 +51,7 @@ const roundToTenth = (value: number | string | undefined): number => {
 
 // Computed properties for sample data organization
 const organizedSamples = computed(() => {
-  if (!report.value.samples || report.value.samples.length === 0) {
-    // Return mock data if no real samples
-    return [
-      { no: 1, weight: 258, no2: 11, weight2: 260, no3: 21, weight3: 206 },
-      { no: 2, weight: 322, no2: 12, weight2: 204, no3: 22, weight3: 215 },
-      { no: 3, weight: 230, no2: 13, weight2: 180, no3: 23, weight3: 231 },
-      { no: 4, weight: 215, no2: 14, weight2: 172, no3: 24, weight3: 218 },
-      { no: 5, weight: 215, no2: 15, weight2: 218, no3: 25, weight3: 207 },
-      { no: 6, weight: 215, no2: 16, weight2: 247, no3: 26, weight3: 252 },
-      { no: 7, weight: 232, no2: 17, weight2: 198, no3: 27, weight3: 261 },
-      { no: 8, weight: 240, no2: 18, weight2: 200, no3: 28, weight3: 210 },
-      { no: 9, weight: 260, no2: 19, weight2: 153, no3: 29, weight3: 146 },
-      { no: 10, weight: 240, no2: 20, weight2: 153, no3: 30, weight3: 218 },
-    ];
-  }
-
-  // Organize real samples in groups of 3
-  const samples = report.value.samples;
+  const samples = report.value.samples || [];
   const organized = [];
   
   for (let i = 0; i < samples.length; i += 3) {

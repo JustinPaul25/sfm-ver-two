@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useSamplingStore } from '@/Stores/SamplingStore';
 import { useInvestorStore } from '@/Stores/InvestorStore';
+import { useCageStore } from '@/Stores/CageStore';
 import { Head, router } from '@inertiajs/vue3';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -22,7 +23,7 @@ interface Sampling {
   investor_id: number;
   date_sampling: string;
   doc: string;
-  cage_no: string;
+  cage_no: number;
   mortality?: number;
   samples_count?: number;
   investor?: {
@@ -46,6 +47,11 @@ interface Investor {
   name: string;
 }
 
+interface Cage {
+  id: number;
+  number_of_fingerlings: number;
+}
+
 const breadcrumbs = [
   { title: 'Dashboard', href: '/dashboard' },
   { title: 'Samplings', href: '/samplings' },
@@ -53,6 +59,7 @@ const breadcrumbs = [
 
 const store = useSamplingStore();
 const investorStore = useInvestorStore();
+const cageStore = useCageStore();
 const search = ref('');
 const isLoading = computed(() => store.loading);
 const showCreateDialog = ref(false);
@@ -61,12 +68,16 @@ const deleteTargetId = ref<number|null>(null);
 const showEditDialog = ref(false);
 const editSampling = ref<Sampling | null>(null);
 const investors = computed(() => investorStore.investorsSelect as Investor[]);
+const cages = computed<Cage[]>(() => {
+  const data = cageStore.cages as any;
+  return data?.data || [];
+});
 
 const newSampling = ref<Pick<Sampling, 'investor_id' | 'date_sampling' | 'doc' | 'cage_no' | 'mortality'>>({
   investor_id: investors.value[0]?.id || 3,
   date_sampling: '',
   doc: '',
-  cage_no: '',
+  cage_no: 0,
   mortality: 0,
 });
 
@@ -119,11 +130,12 @@ function prevPage() {
 }
 
 function openCreateDialog() {
+  const defaultCageId = cages.value[0]?.id ?? 0;
   newSampling.value = {
     investor_id: investors.value[0]?.id || 1,
     date_sampling: '',
     doc: '',
-    cage_no: '',
+    cage_no: defaultCageId,
     mortality: 0,
   };
   showCreateDialog.value = true;
@@ -161,8 +173,7 @@ async function deleteSampling() {
 
 function openEditDialog(s: Sampling) {
   editSampling.value = { 
-    ...s, 
-    cage_no: String(s.cage_no) // Ensure cage_no is a string
+    ...s,
   };
   showEditDialog.value = true;
 }
@@ -173,8 +184,7 @@ async function updateSamplingHandler() {
       await store.updateSampling(editSampling.value.id, {
         investor_id: editSampling.value.investor_id,
         date_sampling: editSampling.value.date_sampling,
-        doc: editSampling.value.doc,
-        cage_no: String(editSampling.value.cage_no),
+        cage_no: editSampling.value.cage_no,
         mortality: editSampling.value.mortality || 0,
       });
       await store.fetchSamplings();
@@ -242,6 +252,7 @@ function printSamplingReport(samplingId: number) {
 onMounted(() => {
   store.fetchSamplings();
   investorStore.fetchInvestorsSelect();
+  cageStore.fetchCages();
 });
 </script>
 
@@ -418,11 +429,30 @@ onMounted(() => {
           </div>
           <div class="flex flex-col gap-2">
             <Label for="create-doc">DOC</Label>
-            <Input id="create-doc" v-model="newSampling.doc" placeholder="DOC" required />
+            <Input
+              id="create-doc"
+              :value="'Auto-generated on save'"
+              disabled
+            />
           </div>
           <div class="flex flex-col gap-2">
-            <Label for="create-cage-no">Cage No</Label>
-            <Input id="create-cage-no" v-model="newSampling.cage_no" placeholder="Cage No" required />
+            <Label for="create-cage-no">Cage</Label>
+            <select
+              id="create-cage-no"
+              v-model.number="newSampling.cage_no"
+              class="input w-full rounded border p-2"
+              required
+            >
+              <option value="" disabled>Select a cage</option>
+              <option
+                v-for="cage in cages"
+                :key="cage.id"
+                :value="cage.id"
+                class="bg-background text-foreground"
+              >
+                Cage #{{ cage.id }} — {{ cage.number_of_fingerlings }} fingerlings
+              </option>
+            </select>
           </div>
           <div class="flex flex-col gap-2">
             <Label for="create-mortality">Mortality</Label>
@@ -471,11 +501,26 @@ onMounted(() => {
           </div>
           <div class="flex flex-col gap-2">
             <Label for="edit-doc">DOC</Label>
-            <Input id="edit-doc" v-model="editSampling.doc" placeholder="DOC" required />
+            <Input id="edit-doc" v-model="editSampling.doc" placeholder="DOC" disabled />
           </div>
           <div class="flex flex-col gap-2">
-            <Label for="edit-cage-no">Cage No</Label>
-            <Input id="edit-cage-no" v-model="editSampling.cage_no" placeholder="Cage No" required />
+            <Label for="edit-cage-no">Cage</Label>
+            <select
+              id="edit-cage-no"
+              v-model.number="editSampling.cage_no"
+              class="input w-full rounded border p-2"
+              required
+            >
+              <option value="" disabled>Select a cage</option>
+              <option
+                v-for="cage in cages"
+                :key="cage.id"
+                :value="cage.id"
+                class="bg-background text-foreground"
+              >
+                Cage #{{ cage.id }} — {{ cage.number_of_fingerlings }} fingerlings
+              </option>
+            </select>
           </div>
           <div class="flex flex-col gap-2">
             <Label for="edit-mortality">Mortality</Label>

@@ -59,7 +59,7 @@ class DocsController extends Controller
      * This is for mobile/device input where weight is calculated from dimensions
      * 
      * POST /api/weight?key=your-api-key
-     * Body: { "height": 10, "width": 5, "sampling_id": 1 }
+     * Body: { "height": 10, "width": 5, "doc": "DOC-20251116-25" }
      */
     public function getWeight(Request $request)
     {
@@ -76,7 +76,7 @@ class DocsController extends Controller
         $rules = [
             'height' => 'required|numeric|min:0',
             'width' => 'required|numeric|min:0',
-            'sampling_id' => 'required|exists:samplings,id',
+            'doc' => 'required|exists:samplings,doc',
         ];
 
         $validator = Validator::make($request->all(), $rules);
@@ -94,21 +94,35 @@ class DocsController extends Controller
         $weight = ($width * ($height * $height)) / 690;
         $final_weight = $weight * 453.592;
 
-        // Find the sampling
-        $sampling = Sampling::with('samples')->findOrFail($request->input('sampling_id'));
-        
+        // Find the sampling using DOC instead of ID
+        $sampling = Sampling::with('samples')
+            ->where('doc', $request->input('doc'))
+            ->firstOrFail();
+
+        // Ensure there are always 30 sample slots for this sampling
+        $desiredSampleCount = 30;
+        $existingSamples = Sample::where('sampling_id', $sampling->id)->count();
+
+        if ($existingSamples < $desiredSampleCount) {
+            $startNo = $existingSamples + 1;
+            for ($i = $startNo; $i <= $desiredSampleCount; $i++) {
+                Sample::create([
+                    'investor_id' => $sampling->investor_id,
+                    'sampling_id' => $sampling->id,
+                    'sample_no' => $i,
+                    'weight' => 0,
+                ]);
+            }
+        }
+
         // Get the first sample with weight 0 (unfilled)
         $current_sample = Sample::where('weight', 0)
             ->where('sampling_id', $sampling->id)
             ->orderBy('sample_no', 'asc')
             ->first();
 
-        // Check if there are any unfilled samples
-        $has_unfilled = Sample::where('weight', 0)
-            ->where('sampling_id', $sampling->id)
-            ->count();
-
-        if ($has_unfilled < 1) {
+        if (!$current_sample) {
+            // All 30 samples have already been filled
             return response()->json(['message' => 'All data is filled in this sampling.'], 422);
         }
 
@@ -119,7 +133,8 @@ class DocsController extends Controller
                 'weight' => round($final_weight, 3)
             ]);
 
-            // Calculate updated statistics for the sampling
+            // Recalculate statistics for the sampling
+            $desiredSampleCount = 30;
             $total_weight = Sample::where('sampling_id', $sampling->id)->sum('weight');
             $has_data_count = Sample::where('weight', '>', 0)
                 ->where('sampling_id', $sampling->id)
@@ -127,6 +142,9 @@ class DocsController extends Controller
 
             // Calculate Average Body Weight (ABW)
             $abw = $has_data_count > 0 ? round($total_weight / $has_data_count, 3) : 0;
+
+            // Remaining samples = total slots (30) - filled slots
+            $remaining_samples = max(0, $desiredSampleCount - $has_data_count);
 
             // If you want to update sampling with these stats, uncomment below
             // Note: Add these fields to samplings table if they don't exist
@@ -146,7 +164,7 @@ class DocsController extends Controller
                         'sample_no' => $current_sample->sample_no,
                         'abw' => $abw,
                         'total_weight' => round($total_weight, 3),
-                        'remaining_samples' => $has_unfilled - 1
+                        'remaining_samples' => $remaining_samples
                     ],
                 ],
                 200

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Sampling;
 use App\Models\Sample;
+use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -57,16 +58,20 @@ class SamplingController extends Controller
         $request->validate([
             'investor_id' => 'required|exists:investors,id',
             'date_sampling' => 'required|date',
-            'doc' => 'required|string',
-            'cage_no' => 'required',
+            // cage_no is a foreign key to cages.id
+            'cage_no' => 'required|exists:cages,id',
             'mortality' => 'nullable|integer|min:0',
         ]);
 
-        // Ensure cage_no is converted to string if it comes as integer
+        // Normalize payload
         $data = $request->all();
         if (isset($data['cage_no'])) {
-            $data['cage_no'] = (string) $data['cage_no'];
+            // Ensure cage_no is stored as an integer that matches cages.id
+            $data['cage_no'] = (int) $data['cage_no'];
         }
+
+        // Auto-generate a unique DOC value based on the sampling date
+        $data['doc'] = $this->generateDoc($data['date_sampling'] ?? now()->toDateString());
         
         $sampling = Sampling::create($data);
 
@@ -81,16 +86,19 @@ class SamplingController extends Controller
         $request->validate([
             'investor_id' => 'required|exists:investors,id',
             'date_sampling' => 'required|date',
-            'doc' => 'required|string',
-            'cage_no' => 'required',
+            // cage_no is a foreign key to cages.id
+            'cage_no' => 'required|exists:cages,id',
             'mortality' => 'nullable|integer|min:0',
         ]);
 
-        // Ensure cage_no is converted to string if it comes as integer
+        // Normalize payload
         $data = $request->all();
         if (isset($data['cage_no'])) {
-            $data['cage_no'] = (string) $data['cage_no'];
+            $data['cage_no'] = (int) $data['cage_no'];
         }
+
+        // Preserve existing DOC; do not allow it to be changed from the request
+        unset($data['doc']);
         
         $sampling->update($data);
 
@@ -110,6 +118,22 @@ class SamplingController extends Controller
         return response()->json([
             'message' => 'Sampling deleted successfully'
         ]);
+    }
+
+    /**
+     * Generate a unique DOC string for a sampling.
+     * Format: DOC-YYYYMMDD-XXXXX
+     */
+    private function generateDoc(string $dateSampling): string
+    {
+        $prefix = 'DOC-' . Carbon::parse($dateSampling)->format('Ymd');
+
+        do {
+            $suffix = str_pad((string) random_int(1, 99999), 5, '0', STR_PAD_LEFT);
+            $doc = $prefix . '-' . $suffix;
+        } while (Sampling::where('doc', $doc)->exists());
+
+        return $doc;
     }
 
     public function report(Request $request)
