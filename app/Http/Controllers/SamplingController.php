@@ -476,22 +476,32 @@ class SamplingController extends Controller
         $sheet->setCellValue('E8', 'No.');
         $sheet->setCellValue('F8', 'Weight (g)');
 
-        // Get samples and organize them in groups of 3
+        // Get samples and organize them sequentially across 3 columns
+        // Column 1: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+        // Column 2: 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+        // Column 3: 21, 22, 23, 24, 25, 26, 27, 28, 29, 30
         $samples = $sampling->samples->sortBy('sample_no')->values();
+        $samplesPerColumn = (int) ceil($samples->count() / 3);
         $row = 9;
         
-        for ($i = 0; $i < count($samples); $i += 3) {
-            $sheet->setCellValue('A' . $row, $samples[$i]->sample_no ?? '');
-            $sheet->setCellValue('B' . $row, $samples[$i]->weight ?? '');
+        for ($rowIndex = 0; $rowIndex < $samplesPerColumn; $rowIndex++) {
+            $col1Index = $rowIndex;                    // Column 1: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (samples 1-10)
+            $col2Index = $rowIndex + $samplesPerColumn; // Column 2: 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 (samples 11-20)
+            $col3Index = $rowIndex + $samplesPerColumn * 2; // Column 3: 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 (samples 21-30)
             
-            if (isset($samples[$i + 1])) {
-                $sheet->setCellValue('C' . $row, $samples[$i + 1]->sample_no ?? '');
-                $sheet->setCellValue('D' . $row, $samples[$i + 1]->weight ?? '');
+            if (isset($samples[$col1Index])) {
+                $sheet->setCellValue('A' . $row, $samples[$col1Index]->sample_no ?? '');
+                $sheet->setCellValue('B' . $row, $samples[$col1Index]->weight ?? '');
             }
             
-            if (isset($samples[$i + 2])) {
-                $sheet->setCellValue('E' . $row, $samples[$i + 2]->sample_no ?? '');
-                $sheet->setCellValue('F' . $row, $samples[$i + 2]->weight ?? '');
+            if (isset($samples[$col2Index])) {
+                $sheet->setCellValue('C' . $row, $samples[$col2Index]->sample_no ?? '');
+                $sheet->setCellValue('D' . $row, $samples[$col2Index]->weight ?? '');
+            }
+            
+            if (isset($samples[$col3Index])) {
+                $sheet->setCellValue('E' . $row, $samples[$col3Index]->sample_no ?? '');
+                $sheet->setCellValue('F' . $row, $samples[$col3Index]->weight ?? '');
             }
             
             $row++;

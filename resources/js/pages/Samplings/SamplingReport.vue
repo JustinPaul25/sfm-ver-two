@@ -50,20 +50,34 @@ const roundToTenth = (value: number | string | undefined): number => {
 };
 
 // Computed properties for sample data organization
+// Organize samples sequentially across 3 columns
+// Column 1: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+// Column 2: 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+// Column 3: 21, 22, 23, 24, 25, 26, 27, 28, 29, 30
 const organizedSamples = computed(() => {
   const samples = report.value.samples || [];
+  // Sort samples by sample_no to ensure correct order
+  const sortedSamples = [...samples].sort((a, b) => (a.sample_no || 0) - (b.sample_no || 0));
   const organized = [];
   
-  for (let i = 0; i < samples.length; i += 3) {
-    const row = {
-      no: samples[i]?.sample_no || '',
-      weight: roundToTenth(samples[i]?.weight),
-      no2: samples[i + 1]?.sample_no || '',
-      weight2: roundToTenth(samples[i + 1]?.weight),
-      no3: samples[i + 2]?.sample_no || '',
-      weight3: roundToTenth(samples[i + 2]?.weight),
+  // Calculate samples per column (divide total samples by 3)
+  const samplesPerColumn = Math.ceil(sortedSamples.length / 3);
+  
+  // Distribute samples sequentially: first third in column 1, second third in column 2, last third in column 3
+  for (let row = 0; row < samplesPerColumn; row++) {
+    const col1Index = row;                    // Column 1: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (samples 1-10)
+    const col2Index = row + samplesPerColumn; // Column 2: 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 (samples 11-20)
+    const col3Index = row + samplesPerColumn * 2; // Column 3: 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 (samples 21-30)
+    
+    const rowData = {
+      no: sortedSamples[col1Index]?.sample_no || '',
+      weight: roundToTenth(sortedSamples[col1Index]?.weight),
+      no2: sortedSamples[col2Index]?.sample_no || '',
+      weight2: roundToTenth(sortedSamples[col2Index]?.weight),
+      no3: sortedSamples[col3Index]?.sample_no || '',
+      weight3: roundToTenth(sortedSamples[col3Index]?.weight),
     };
-    organized.push(row);
+    organized.push(rowData);
   }
   
   return organized;

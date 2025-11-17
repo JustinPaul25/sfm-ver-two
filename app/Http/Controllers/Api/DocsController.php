@@ -99,26 +99,34 @@ class DocsController extends Controller
             ->where('doc', $request->input('doc'))
             ->firstOrFail();
 
-        // Ensure there are always 30 sample slots for this sampling
+        // Ensure there are always 30 sample slots for this sampling (1-30)
         $desiredSampleCount = 30;
-        $existingSamples = Sample::where('sampling_id', $sampling->id)->count();
-
-        if ($existingSamples < $desiredSampleCount) {
-            $startNo = $existingSamples + 1;
-            for ($i = $startNo; $i <= $desiredSampleCount; $i++) {
+        
+        // Get all existing sample numbers for this sampling (convert to integers for proper comparison)
+        $existingSampleNos = Sample::where('sampling_id', $sampling->id)
+            ->pluck('sample_no')
+            ->map(function($no) {
+                return (int) $no; // Convert string to integer
+            })
+            ->toArray();
+        
+        // Create any missing samples from 1 to 30
+        for ($i = 1; $i <= $desiredSampleCount; $i++) {
+            if (!in_array($i, $existingSampleNos)) {
                 Sample::create([
                     'investor_id' => $sampling->investor_id,
                     'sampling_id' => $sampling->id,
-                    'sample_no' => $i,
+                    'sample_no' => (string) $i, // Store as string to match database type
                     'weight' => 0,
                 ]);
             }
         }
 
-        // Get the first sample with weight 0 (unfilled)
+        // Get the first sample with weight 0 (unfilled), ordered by sample_no as integer
+        // Use CAST to ensure proper numeric ordering (not string ordering)
         $current_sample = Sample::where('weight', 0)
             ->where('sampling_id', $sampling->id)
-            ->orderBy('sample_no', 'asc')
+            ->orderByRaw('CAST(sample_no AS UNSIGNED) ASC')
             ->first();
 
         if (!$current_sample) {
