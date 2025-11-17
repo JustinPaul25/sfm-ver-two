@@ -34,8 +34,8 @@ class CageFeedingScheduleController extends Controller
             ->map(function ($cage) {
                 return [
                     'id' => $cage->id,
-                    'investor_name' => $cage->investor->name,
-                    'feed_type' => $cage->feedType->feed_type,
+                    'investor_name' => $cage->investor ? $cage->investor->name : null,
+                    'feed_type' => $cage->feedType ? $cage->feedType->feed_type : null,
                     'number_of_fingerlings' => $cage->number_of_fingerlings,
                     'has_schedule' => $cage->feedingSchedule ? true : false,
                     'next_feeding' => $cage->feedingSchedule ? $cage->feedingSchedule->next_feeding_time : null,
@@ -161,14 +161,14 @@ class CageFeedingScheduleController extends Controller
             ->where('is_active', true)
             ->get()
             ->filter(function ($schedule) {
-                return $schedule->is_feeding_time;
+                return $schedule->isFeedingTime();
             })
             ->map(function ($schedule) {
                 return [
                     'id' => $schedule->id,
                     'cage_id' => $schedule->cage_id,
                     'cage_name' => "Cage {$schedule->cage_id}",
-                    'investor_name' => $schedule->cage->investor->name,
+                    'investor_name' => $schedule->cage && $schedule->cage->investor ? $schedule->cage->investor->name : null,
                     'schedule_name' => $schedule->schedule_name,
                     'next_feeding_time' => $schedule->next_feeding_time,
                     'feeding_times' => $schedule->feeding_times,
@@ -440,7 +440,7 @@ class CageFeedingScheduleController extends Controller
         
         $notes .= "Fingerlings: {$cage->number_of_fingerlings}\n";
         $notes .= "Daily Amount: {$totalDailyAmount} kg\n";
-        $notes .= "Feed Type: {$cage->feedType->feed_type}\n";
+        $notes .= "Feed Type: " . ($cage->feedType ? $cage->feedType->feed_type : 'N/A') . "\n";
         $notes .= "Generated on: " . now()->format('Y-m-d H:i:s');
         
         return $notes;
