@@ -16,12 +16,15 @@ class CageController extends Controller
 
     public function list(Request $request)
     {
-        $query = Cage::query();
+        $query = Cage::with('investor');
 
-        if ($request->has('search')) {
+        if ($request->has('search') && $request->get('search')) {
             $search = $request->get('search');
             $query->where(function($q) use ($search) {
-                $q->where('number_of_fingerlings', 'like', "%{$search}%");
+                $q->where('number_of_fingerlings', 'like', "%{$search}%")
+                  ->orWhereHas('investor', function($investorQuery) use ($search) {
+                      $investorQuery->where('name', 'like', "%{$search}%");
+                  });
             });
         }
 
