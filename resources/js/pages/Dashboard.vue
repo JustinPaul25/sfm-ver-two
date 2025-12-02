@@ -2,12 +2,13 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import SamplingTrendsChart from '@/components/charts/SamplingTrendsChart.vue';
 import { router } from '@inertiajs/vue3';
+import axios from 'axios';
 
 // Props from Inertia
 const props = defineProps<{
@@ -25,6 +26,18 @@ const breadcrumbs: BreadcrumbItem[] = [
 const selectedPeriod = ref('30days');
 const customStartDate = ref('');
 const customEndDate = ref('');
+
+// Investor and Cage filters
+const selectedInvestorId = ref<string | null>(null);
+const selectedCageId = ref<string | null>(null);
+const investors = ref<any[]>([]);
+const cages = ref<any[]>([]);
+const investorSearch = ref('');
+const cageSearch = ref('');
+const loadingInvestors = ref(false);
+const loadingCages = ref(false);
+const showInvestorDropdown = ref(false);
+const showCageDropdown = ref(false);
 
 const periods = [
     { value: 'day', label: 'Today' },
@@ -115,6 +128,14 @@ function reloadDashboard() {
         params.end_date = customEndDate.value;
     }
     
+    if (selectedInvestorId.value) {
+        params.investor_id = selectedInvestorId.value;
+    }
+    
+    if (selectedCageId.value) {
+        params.cage_no = selectedCageId.value;
+    }
+    
     router.get('/dashboard', params, {
         preserveState: true,
         preserveScroll: true,
@@ -135,6 +156,116 @@ function formatNumber(num: number) {
 function formatWeight(weight: number) {
     return `${weight.toFixed(1)}g`;
 }
+
+// Fetch investors
+async function fetchInvestors() {
+    if (investors.value.length > 0) return; // Already loaded
+    loadingInvestors.value = true;
+    try {
+        // @ts-ignore - route is available globally via ZiggyVue
+        const response = await axios.get(route('investors.select'));
+        investors.value = response.data;
+    } catch (error) {
+        console.error('Error fetching investors:', error);
+    } finally {
+        loadingInvestors.value = false;
+    }
+}
+
+// Fetch cages for selected investor
+async function fetchCages() {
+    if (!selectedInvestorId.value) {
+        cages.value = [];
+        selectedCageId.value = null;
+        return;
+    }
+    
+    loadingCages.value = true;
+    try {
+        // @ts-ignore - route is available globally via ZiggyVue
+        const response = await axios.get(route('cages.select'), {
+            params: { investor_id: selectedInvestorId.value }
+        });
+        cages.value = response.data;
+    } catch (error) {
+        console.error('Error fetching cages:', error);
+    } finally {
+        loadingCages.value = false;
+    }
+}
+
+// Filter investors based on search
+const filteredInvestors = computed(() => {
+    if (!investorSearch.value) {
+        return investors.value;
+    }
+    const search = investorSearch.value.toLowerCase();
+    return investors.value.filter(inv => 
+        inv.name?.toLowerCase().includes(search)
+    );
+});
+
+// Filter cages based on search
+const filteredCages = computed(() => {
+    if (!cageSearch.value) {
+        return cages.value;
+    }
+    const search = cageSearch.value.toLowerCase();
+    return cages.value.filter(cage => 
+        cage.id?.toString().includes(search) ||
+        cage.number_of_fingerlings?.toString().includes(search)
+    );
+});
+
+// Watch for investor changes to fetch cages
+watch(selectedInvestorId, () => {
+    selectedCageId.value = null;
+    fetchCages();
+    reloadDashboard();
+});
+
+// Watch for cage changes to reload dashboard
+watch(selectedCageId, () => {
+    reloadDashboard();
+});
+
+// Close dropdowns when clicking outside
+function handleClickOutside(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.investor-dropdown-container')) {
+        showInvestorDropdown.value = false;
+    }
+    if (!target.closest('.cage-dropdown-container')) {
+        showCageDropdown.value = false;
+    }
+}
+
+// Initialize on mount
+onMounted(() => {
+    fetchInvestors();
+    
+    // Get initial filters from URL params if present
+    const urlParams = new URLSearchParams(window.location.search);
+    const investorId = urlParams.get('investor_id');
+    const cageNo = urlParams.get('cage_no');
+    
+    if (investorId) {
+        selectedInvestorId.value = investorId;
+        fetchCages().then(() => {
+            if (cageNo) {
+                selectedCageId.value = cageNo;
+            }
+        });
+    }
+    
+    // Add click outside listener
+    document.addEventListener('click', handleClickOutside);
+});
+
+// Cleanup
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <template>
@@ -143,46 +274,48 @@ function formatWeight(weight: number) {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex h-full flex-1 flex-col gap-6 p-4">
             <!-- Header with period filter -->
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold">Dashboard Analytics</h1>
-                    <p class="text-muted-foreground">
-                        {{ analytics.date_range?.period || 'This Month' }} 
-                        ({{ analytics.date_range?.start }} to {{ analytics.date_range?.end }})
-                    </p>
-                </div>
-                
-                <!-- Period Filter -->
-                <div class="flex flex-col sm:flex-row gap-2">
-                    <div class="flex gap-1">
-                        <Button 
-                            v-for="period in periods" 
-                            :key="period.value"
-                            :variant="selectedPeriod === period.value ? 'default' : 'outline'"
-                            size="sm"
-                            @click="updatePeriod(period.value)"
-                        >
-                            {{ period.label }}
-                        </Button>
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold">Dashboard Analytics</h1>
+                        <p class="text-muted-foreground">
+                            {{ analytics.date_range?.period || 'This Month' }} 
+                            ({{ analytics.date_range?.start }} to {{ analytics.date_range?.end }})
+                        </p>
                     </div>
                     
-                    <!-- Custom Date Range -->
-                    <div v-if="selectedPeriod === 'custom'" class="flex gap-2">
-                        <Input 
-                            v-model="customStartDate" 
-                            type="date" 
-                            placeholder="Start Date"
-                            class="w-32"
-                        />
-                        <Input 
-                            v-model="customEndDate" 
-                            type="date" 
-                            placeholder="End Date"
-                            class="w-32"
-                        />
-                        <Button @click="applyCustomDateRange" size="sm">
-                            Apply
-                        </Button>
+                    <!-- Period Filter -->
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="flex gap-1">
+                            <Button 
+                                v-for="period in periods" 
+                                :key="period.value"
+                                :variant="selectedPeriod === period.value ? 'default' : 'outline'"
+                                size="sm"
+                                @click="updatePeriod(period.value)"
+                            >
+                                {{ period.label }}
+                            </Button>
+                        </div>
+                        
+                        <!-- Custom Date Range -->
+                        <div v-if="selectedPeriod === 'custom'" class="flex gap-2">
+                            <Input 
+                                v-model="customStartDate" 
+                                type="date" 
+                                placeholder="Start Date"
+                                class="w-32"
+                            />
+                            <Input 
+                                v-model="customEndDate" 
+                                type="date" 
+                                placeholder="End Date"
+                                class="w-32"
+                            />
+                            <Button @click="applyCustomDateRange" size="sm">
+                                Apply
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -207,7 +340,85 @@ function formatWeight(weight: number) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Sampling Trends Chart -->
                 <Card class="p-6">
-                    <h3 class="text-lg font-semibold mb-4">Sampling Trends</h3>
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+                        <h3 class="text-lg font-semibold">Sampling Trends</h3>
+                        
+                        <!-- Investor and Cage Filters -->
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <!-- Investor Select -->
+                            <div class="investor-dropdown-container">
+                                <div class="relative">
+                                    <Input
+                                        v-model="investorSearch"
+                                        type="text"
+                                        :placeholder="selectedInvestorId ? investors.find(i => i.id.toString() === selectedInvestorId)?.name || 'Search investor...' : 'Investor'"
+                                        class="w-full sm:w-40"
+                                        @focus="showInvestorDropdown = true; fetchInvestors()"
+                                        @input="showInvestorDropdown = true"
+                                    />
+                                    <div 
+                                        v-if="showInvestorDropdown && (investorSearch || filteredInvestors.length > 0)"
+                                        class="absolute z-10 w-full sm:w-64 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                            :class="{ 'bg-blue-50 dark:bg-blue-900/20': !selectedInvestorId }"
+                                            @click="selectedInvestorId = null; investorSearch = ''; showInvestorDropdown = false; reloadDashboard()"
+                                        >
+                                            <span class="font-medium">All Investors (Overall)</span>
+                                        </button>
+                                        <div
+                                            v-for="investor in filteredInvestors"
+                                            :key="investor.id"
+                                            class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                            :class="{ 'bg-blue-50 dark:bg-blue-900/20': selectedInvestorId === investor.id.toString() }"
+                                            @click="selectedInvestorId = investor.id.toString(); investorSearch = investor.name; showInvestorDropdown = false; reloadDashboard()"
+                                        >
+                                            {{ investor.name }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Cage Select -->
+                            <div class="cage-dropdown-container" v-if="selectedInvestorId">
+                                <div class="relative">
+                                    <Input
+                                        v-model="cageSearch"
+                                        type="text"
+                                        :placeholder="selectedCageId ? `Cage ${selectedCageId}` : 'Cage'"
+                                        class="w-full sm:w-32"
+                                        :disabled="!selectedInvestorId"
+                                        @focus="showCageDropdown = true"
+                                        @input="showCageDropdown = true"
+                                    />
+                                    <div 
+                                        v-if="showCageDropdown && (cageSearch || filteredCages.length > 0) && selectedInvestorId"
+                                        class="absolute z-10 w-full sm:w-64 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
+                                    >
+                                        <button
+                                            type="button"
+                                            class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                            :class="{ 'bg-blue-50 dark:bg-blue-900/20': !selectedCageId }"
+                                            @click="selectedCageId = null; cageSearch = ''; showCageDropdown = false; reloadDashboard()"
+                                        >
+                                            <span class="font-medium">All Cages (Investor Overall)</span>
+                                        </button>
+                                        <div
+                                            v-for="cage in filteredCages"
+                                            :key="cage.id"
+                                            class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                                            :class="{ 'bg-blue-50 dark:bg-blue-900/20': selectedCageId === cage.id.toString() }"
+                                            @click="selectedCageId = cage.id.toString(); cageSearch = `Cage ${cage.id}`; showCageDropdown = false; reloadDashboard()"
+                                        >
+                                            Cage {{ cage.id }} ({{ cage.number_of_fingerlings }} fingerlings)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <SamplingTrendsChart :trends="analytics.sampling_trends || []" />
                 </Card>
 

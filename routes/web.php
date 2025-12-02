@@ -24,6 +24,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('investors/{investor}', [InvestorController::class, 'update'])->name('investors.update');
     Route::delete('investors/{investor}', [InvestorController::class, 'destroy'])->name('investors.destroy');
     Route::get('investors/select', [InvestorController::class, 'select'])->name('investors.select');
+    Route::get('investors/{investor}/report', [InvestorController::class, 'report'])->name('investors.report');
 
     // SamplingController
     Route::get('samplings', [SamplingController::class, 'index'])->name('samplings.index');
@@ -50,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
     // CageController
     Route::get('cages', [CageController::class, 'index'])->name('cages.index');
     Route::get('cages/list', [CageController::class, 'list'])->name('cages.list');
+    Route::get('cages/select', [CageController::class, 'select'])->name('cages.select');
     Route::post('cages', [CageController::class, 'store'])->name('cages.store');
     Route::put('cages/{cage}', [CageController::class, 'update'])->name('cages.update');
     Route::delete('cages/{cage}', [CageController::class, 'destroy'])->name('cages.destroy');
@@ -63,6 +65,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Cage Feeding Schedule Routes
     Route::get('cages/feeding-schedules', [CageFeedingScheduleController::class, 'index'])->name('cages.feeding-schedules');
+    Route::get('cages/{cage}/feeding-schedule-details', [CageFeedingScheduleController::class, 'getCageScheduleDetails'])->name('cages.feeding-schedule-details');
     Route::post('cages/feeding-schedules', [CageFeedingScheduleController::class, 'store'])->name('cages.feeding-schedules.store');
     Route::post('cages/feeding-schedules/auto-generate', [CageFeedingScheduleController::class, 'autoGenerate'])->name('cages.feeding-schedules.auto-generate');
     Route::put('cages/feeding-schedules/{schedule}', [CageFeedingScheduleController::class, 'update'])->name('cages.feeding-schedules.update');

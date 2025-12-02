@@ -41,6 +41,24 @@ class CageController extends Controller
         ]);
     }
 
+    public function select(Request $request)
+    {
+        $investorId = $request->get('investor_id');
+        
+        $query = Cage::query()
+            ->whereHas('investor', function($q) {
+                $q->whereNull('deleted_at');
+            });
+        
+        if ($investorId) {
+            $query->where('investor_id', $investorId);
+        }
+        
+        $cages = $query->get();
+        
+        return response()->json($cages);
+    }
+
     public function store(Request $request)
     {
         $request->validate([

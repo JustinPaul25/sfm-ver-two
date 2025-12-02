@@ -19,11 +19,13 @@ class DashboardController extends Controller
         $period = $request->get('period', '30days'); // 30days, month, week, day, custom
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
+        $investorId = $request->get('investor_id');
+        $cageNo = $request->get('cage_no');
 
         // Set date range based on period
         $dateRange = $this->getDateRange($period, $startDate, $endDate);
         
-        $analytics = $this->getAnalytics($dateRange['start'], $dateRange['end']);
+        $analytics = $this->getAnalytics($dateRange['start'], $dateRange['end'], $investorId, $cageNo);
 
         return Inertia::render('Dashboard', $analytics);
     }
@@ -63,37 +65,50 @@ class DashboardController extends Controller
         ];
     }
 
-    private function getAnalytics($startDate, $endDate)
+    private function getAnalytics($startDate, $endDate, $investorId = null, $cageNo = null)
     {
         // Total counts
         $totalInvestors = Investor::count();
         $totalCages = Cage::count();
         $totalFeedTypes = FeedType::count();
         
-        // Sampling analytics for the date range
-        $samplingsInPeriod = Sampling::whereBetween('date_sampling', [$startDate, $endDate])
+        // Build base query for filtering
+        $samplingQuery = Sampling::whereBetween('date_sampling', [$startDate, $endDate])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
-            })
-            ->count();
+            });
+        
+        if ($investorId) {
+            $samplingQuery->where('investor_id', $investorId);
+        }
+        
+        if ($cageNo) {
+            $samplingQuery->where('cage_no', $cageNo);
+        }
+        
+        // Sampling analytics for the date range
+        $samplingsInPeriod = $samplingQuery->count();
         $totalSamplings = Sampling::count();
         
         // Sample analytics
-        $samplesInPeriod = Sample::whereHas('sampling', function($query) use ($startDate, $endDate) {
+        $sampleQuery = Sample::whereHas('sampling', function($query) use ($startDate, $endDate, $investorId, $cageNo) {
             $query->whereBetween('date_sampling', [$startDate, $endDate])
                   ->whereHas('investor', function($q) {
                       $q->whereNull('deleted_at');
                   });
-        })->count();
+            if ($investorId) {
+                $query->where('investor_id', $investorId);
+            }
+            if ($cageNo) {
+                $query->where('cage_no', $cageNo);
+            }
+        });
+        
+        $samplesInPeriod = $sampleQuery->count();
         $totalSamples = Sample::count();
         
         // Weight analytics
-        $weightStats = Sample::whereHas('sampling', function($query) use ($startDate, $endDate) {
-            $query->whereBetween('date_sampling', [$startDate, $endDate])
-                  ->whereHas('investor', function($q) {
-                      $q->whereNull('deleted_at');
-                  });
-        })->selectRaw('
+        $weightStats = $sampleQuery->selectRaw('
             COUNT(*) as total_samples,
             AVG(weight) as avg_weight,
             MIN(weight) as min_weight,
@@ -115,8 +130,8 @@ class DashboardController extends Controller
         ->limit(5)
         ->get();
 
-        // Sampling trends over time
-        $samplingTrends = Sampling::selectRaw('
+        // Sampling trends over time - filtered by investor and/or cage
+        $samplingTrendsQuery = Sampling::selectRaw('
             DATE(date_sampling) as date,
             COUNT(DISTINCT samplings.id) as count,
             AVG(samples.weight) as avg_weight
@@ -124,10 +139,19 @@ class DashboardController extends Controller
         ->leftJoin('samples', 'samplings.id', '=', 'samples.sampling_id')
         ->join('investors', 'samplings.investor_id', '=', 'investors.id')
         ->whereNull('investors.deleted_at')
-        ->whereBetween('date_sampling', [$startDate, $endDate])
-        ->groupBy('date')
-        ->orderBy('date')
-        ->get();
+        ->whereBetween('date_sampling', [$startDate, $endDate]);
+        
+        if ($investorId) {
+            $samplingTrendsQuery->where('samplings.investor_id', $investorId);
+        }
+        
+        if ($cageNo) {
+            $samplingTrendsQuery->where('samplings.cage_no', $cageNo);
+        }
+        
+        $samplingTrends = $samplingTrendsQuery->groupBy('date')
+            ->orderBy('date')
+            ->get();
 
         // Feed type usage
         $feedTypeUsage = Cage::selectRaw('
@@ -160,7 +184,7 @@ class DashboardController extends Controller
         ->get();
 
         // Growth metrics
-        $growthMetrics = $this->calculateGrowthMetrics($startDate, $endDate);
+        $growthMetrics = $this->calculateGrowthMetrics($startDate, $endDate, $investorId, $cageNo);
 
         return [
             'analytics' => [
@@ -194,38 +218,66 @@ class DashboardController extends Controller
         ];
     }
 
-    private function calculateGrowthMetrics($startDate, $endDate)
+    private function calculateGrowthMetrics($startDate, $endDate, $investorId = null, $cageNo = null)
     {
         // Previous period for comparison
         $periodLength = $startDate->diffInDays($endDate);
         $previousStart = $startDate->copy()->subDays($periodLength);
         $previousEnd = $startDate->copy()->subDay();
 
-        // Current period stats
-        $currentSamplings = Sampling::whereBetween('date_sampling', [$startDate, $endDate])
+        // Build query for current period
+        $currentSamplingsQuery = Sampling::whereBetween('date_sampling', [$startDate, $endDate])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
-            })
-            ->count();
-        $currentAvgWeight = Sample::whereHas('sampling', function($query) use ($startDate, $endDate) {
+            });
+        if ($investorId) {
+            $currentSamplingsQuery->where('investor_id', $investorId);
+        }
+        if ($cageNo) {
+            $currentSamplingsQuery->where('cage_no', $cageNo);
+        }
+        $currentSamplings = $currentSamplingsQuery->count();
+        
+        $currentAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($startDate, $endDate, $investorId, $cageNo) {
             $query->whereBetween('date_sampling', [$startDate, $endDate])
                   ->whereHas('investor', function($q) {
                       $q->whereNull('deleted_at');
                   });
-        })->avg('weight') ?? 0;
+            if ($investorId) {
+                $query->where('investor_id', $investorId);
+            }
+            if ($cageNo) {
+                $query->where('cage_no', $cageNo);
+            }
+        });
+        $currentAvgWeight = $currentAvgWeightQuery->avg('weight') ?? 0;
 
         // Previous period stats
-        $previousSamplings = Sampling::whereBetween('date_sampling', [$previousStart, $previousEnd])
+        $previousSamplingsQuery = Sampling::whereBetween('date_sampling', [$previousStart, $previousEnd])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
-            })
-            ->count();
-        $previousAvgWeight = Sample::whereHas('sampling', function($query) use ($previousStart, $previousEnd) {
+            });
+        if ($investorId) {
+            $previousSamplingsQuery->where('investor_id', $investorId);
+        }
+        if ($cageNo) {
+            $previousSamplingsQuery->where('cage_no', $cageNo);
+        }
+        $previousSamplings = $previousSamplingsQuery->count();
+        
+        $previousAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($previousStart, $previousEnd, $investorId, $cageNo) {
             $query->whereBetween('date_sampling', [$previousStart, $previousEnd])
                   ->whereHas('investor', function($q) {
                       $q->whereNull('deleted_at');
                   });
-        })->avg('weight') ?? 0;
+            if ($investorId) {
+                $query->where('investor_id', $investorId);
+            }
+            if ($cageNo) {
+                $query->where('cage_no', $cageNo);
+            }
+        });
+        $previousAvgWeight = $previousAvgWeightQuery->avg('weight') ?? 0;
 
         // Calculate growth percentages
         $samplingGrowth = $previousSamplings > 0 ? 

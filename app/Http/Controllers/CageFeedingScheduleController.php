@@ -184,6 +184,98 @@ class CageFeedingScheduleController extends Controller
         ]);
     }
 
+    public function getCageScheduleDetails(Cage $cage)
+    {
+        $schedule = $cage->feedingSchedule;
+        
+        if (!$schedule) {
+            return response()->json([
+                'has_schedule' => false,
+                'message' => 'No active schedule found for this cage'
+            ]);
+        }
+
+        // Get upcoming feedings for today and tomorrow
+        $upcomingFeedings = $this->getUpcomingFeedings($schedule);
+
+        return response()->json([
+            'has_schedule' => true,
+            'cage' => [
+                'id' => $cage->id,
+                'number_of_fingerlings' => (int) $cage->number_of_fingerlings,
+                'investor_name' => $cage->investor ? $cage->investor->name : null,
+                'feed_type' => $cage->feedType ? $cage->feedType->feed_type : null,
+            ],
+            'schedule' => [
+                'id' => $schedule->id,
+                'schedule_name' => $schedule->schedule_name,
+                'frequency' => $schedule->frequency,
+                'total_daily_amount' => (float) $schedule->total_daily_amount,
+                'feeding_times' => $schedule->feeding_times,
+                'feeding_amounts' => array_map(function($amount) {
+                    return (float) $amount;
+                }, $schedule->feeding_amounts),
+                'next_feeding_time' => $schedule->next_feeding_time,
+                'notes' => $schedule->notes,
+                'created_at' => $schedule->created_at,
+            ],
+            'upcoming_feedings' => array_map(function($feeding) {
+                return [
+                    'date' => $feeding['date'],
+                    'time' => $feeding['time'],
+                    'amount' => (float) $feeding['amount'],
+                    'formatted_time' => $feeding['formatted_time'],
+                ];
+            }, $upcomingFeedings),
+        ]);
+    }
+
+    private function getUpcomingFeedings(CageFeedingSchedule $schedule)
+    {
+        $upcoming = [];
+        $now = now();
+        $today = $now->format('Y-m-d');
+        $tomorrow = $now->copy()->addDay()->format('Y-m-d');
+        
+        $feedingTimes = $schedule->feeding_times;
+        $feedingAmounts = $schedule->feeding_amounts;
+        
+        // Get remaining feedings for today
+        foreach ($feedingTimes as $index => $time) {
+            $feedingDateTime = $today . ' ' . $time;
+            if (strtotime($feedingDateTime) > $now->timestamp) {
+                $upcoming[] = [
+                    'date' => $today,
+                    'time' => $time,
+                    'amount' => $feedingAmounts[$index] ?? 0,
+                    'formatted_time' => date('g:i A', strtotime($feedingDateTime)),
+                ];
+            }
+        }
+        
+        // Get all feedings for tomorrow
+        foreach ($feedingTimes as $index => $time) {
+            $upcoming[] = [
+                'date' => $tomorrow,
+                'time' => $time,
+                'amount' => $feedingAmounts[$index] ?? 0,
+                'formatted_time' => date('g:i A', strtotime($tomorrow . ' ' . $time)),
+            ];
+        }
+        
+        // Sort by date and time
+        usort($upcoming, function($a, $b) {
+            $dateCompare = strcmp($a['date'], $b['date']);
+            if ($dateCompare !== 0) {
+                return $dateCompare;
+            }
+            return strcmp($a['time'], $b['time']);
+        });
+        
+        // Limit to next 5 feedings
+        return array_slice($upcoming, 0, 5);
+    }
+
     public function autoGenerate(Request $request)
     {
         $request->validate([

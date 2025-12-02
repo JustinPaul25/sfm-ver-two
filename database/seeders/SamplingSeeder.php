@@ -57,6 +57,7 @@ class SamplingSeeder extends Seeder
                     'date_sampling' => now()->subDays($daysAgo)->format('Y-m-d'),
                     'doc' => 'DOC-' . now()->subDays($daysAgo)->format('Ymd') . '-' . str_pad($dayCounter % 100 + 1, 2, '0', STR_PAD_LEFT),
                     'mortality' => $mortality,
+                    'feed_types_id' => $cage->feed_types_id, // Automatically get feed type from cage
                 ]);
                 
                 $dayCounter++;
@@ -98,6 +99,7 @@ class SamplingSeeder extends Seeder
                         'date_sampling' => now()->subDays($samplingInfo['days_ago'])->format('Y-m-d'),
                         'doc' => 'DOC-TEST-' . str_pad($samplingInfo['days_ago'], 3, '0', STR_PAD_LEFT),
                         'mortality' => rand(0, 30),
+                        'feed_types_id' => $cage->feed_types_id, // Automatically get feed type from cage
                     ]);
                 }
             }

@@ -11,9 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('samples', function (Blueprint $table) {
-            $table->float('length')->nullable()->after('weight');
-            $table->float('width')->nullable()->after('length');
+        Schema::table('samplings', function (Blueprint $table) {
+            $table->foreignId('feed_types_id')->nullable()->after('cage_no')->constrained('feed_types')->onDelete('set null');
         });
     }
 
@@ -22,8 +21,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('samples', function (Blueprint $table) {
-            $table->dropColumn(['length', 'width']);
+        Schema::table('samplings', function (Blueprint $table) {
+            $table->dropForeign(['feed_types_id']);
+            $table->dropColumn('feed_types_id');
         });
     }
 };

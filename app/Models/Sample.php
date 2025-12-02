@@ -13,6 +13,8 @@ class Sample extends Model
         'sampling_id',
         'sample_no',
         'weight',
+        'length',
+        'width',
     ];
 
     public function investor() {

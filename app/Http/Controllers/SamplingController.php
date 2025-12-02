@@ -68,6 +68,12 @@ class SamplingController extends Controller
         if (isset($data['cage_no'])) {
             // Ensure cage_no is stored as an integer that matches cages.id
             $data['cage_no'] = (int) $data['cage_no'];
+            
+            // Automatically get feed_types_id from the cage
+            $cage = \App\Models\Cage::find($data['cage_no']);
+            if ($cage && $cage->feed_types_id) {
+                $data['feed_types_id'] = $cage->feed_types_id;
+            }
         }
 
         // Auto-generate a unique DOC value based on the sampling date
@@ -95,6 +101,12 @@ class SamplingController extends Controller
         $data = $request->all();
         if (isset($data['cage_no'])) {
             $data['cage_no'] = (int) $data['cage_no'];
+            
+            // Automatically get feed_types_id from the cage
+            $cage = \App\Models\Cage::find($data['cage_no']);
+            if ($cage && $cage->feed_types_id) {
+                $data['feed_types_id'] = $cage->feed_types_id;
+            }
         }
 
         // Preserve existing DOC; do not allow it to be changed from the request
@@ -142,7 +154,7 @@ class SamplingController extends Controller
         
         if ($samplingId) {
             // Get specific sampling data with cage information
-            $sampling = Sampling::with(['investor', 'samples'])
+            $sampling = Sampling::with(['investor', 'samples', 'feedType'])
                 ->whereHas('investor', function($q) {
                     $q->whereNull('deleted_at');
                 })
@@ -150,7 +162,7 @@ class SamplingController extends Controller
             
             if ($sampling) {
                 // Get cage information for accurate biomass calculation
-                $cage = \App\Models\Cage::where('id', $sampling->cage_no)->first();
+                $cage = \App\Models\Cage::with('feedType')->where('id', $sampling->cage_no)->first();
                 $numberOfFish = $cage ? $cage->number_of_fingerlings : 5000; // Fallback to default
                 $mortality = $sampling->mortality ?? 0;
                 $presentStocks = $numberOfFish - $mortality;
@@ -160,6 +172,20 @@ class SamplingController extends Controller
                 $totalWeight = $samples->sum('weight');
                 $totalSamples = $samples->count();
                 $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
+                
+                // Calculate average length and width from samples (all fish in one cage are sized at the same time)
+                $avgLength = $samples->whereNotNull('length')->count() > 0 
+                    ? round($samples->whereNotNull('length')->avg('length'), 1) : null;
+                $avgWidth = $samples->whereNotNull('width')->count() > 0 
+                    ? round($samples->whereNotNull('width')->avg('width'), 1) : null;
+                
+                // Get feed type name from sampling (preferred) or from cage
+                $feedTypeName = null;
+                if ($sampling->feedType) {
+                    $feedTypeName = $sampling->feedType->feed_type;
+                } elseif ($cage && $cage->feedType) {
+                    $feedTypeName = $cage->feedType->feed_type;
+                }
                 
                 // Calculate biomass (kg) = (Average Body Weight × Present Stocks) / 1000
                 $biomass = round(($avgWeight * $presentStocks) / 1000, 2);
@@ -230,6 +256,15 @@ class SamplingController extends Controller
                         ];
                     });
                 
+                // Create cage entry with size and feed type (one entry per cage)
+                $cageEntry = [
+                    'cageNo' => $sampling->cage_no,
+                    'weight' => round($avgWeight / 1000, 1), // Convert to kg
+                    'length' => $avgLength,
+                    'width' => $avgWidth,
+                    'type' => $feedTypeName, // Feed type name (e.g., "Starter Feed", "Grower Feed")
+                ];
+                
                 $reportData = [
                     'sampling' => [
                         'id' => $sampling->id,
@@ -238,6 +273,7 @@ class SamplingController extends Controller
                         'cageNo' => $sampling->cage_no,
                         'doc' => $sampling->doc,
                     ],
+                    'cageEntry' => $cageEntry, // One entry per cage with size and type
                     'samples' => $samples->sortBy('sample_no')->values(),
                     'totals' => [
                         'totalWeight' => $totalWeight,
@@ -462,19 +498,53 @@ class SamplingController extends Controller
         $sheet->mergeCells('A1:F1');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(16);
 
+        // Get cage information
+        $cage = \App\Models\Cage::with('feedType')->where('id', $sampling->cage_no)->first();
+        $sampling->load('feedType');
+        $samples = $sampling->samples;
+        $totalWeight = $samples->sum('weight');
+        $totalSamples = $samples->count();
+        $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
+        $avgLength = $samples->whereNotNull('length')->count() > 0 
+            ? round($samples->whereNotNull('length')->avg('length'), 1) : null;
+        $avgWidth = $samples->whereNotNull('width')->count() > 0 
+            ? round($samples->whereNotNull('width')->avg('width'), 1) : null;
+        
+        // Get feed type name from sampling (preferred) or from cage
+        $feedTypeName = null;
+        if ($sampling->feedType) {
+            $feedTypeName = $sampling->feedType->feed_type;
+        } elseif ($cage && $cage->feedType) {
+            $feedTypeName = $cage->feedType->feed_type;
+        }
+        
+        $weightKg = round($avgWeight / 1000, 1);
+
         // Set report details
         $sheet->setCellValue('A3', 'Date: ' . $sampling->date_sampling);
         $sheet->setCellValue('A4', 'Investor: ' . $sampling->investor->name);
         $sheet->setCellValue('A5', 'Cage No: ' . $sampling->cage_no);
         $sheet->setCellValue('A6', 'DOC: ' . $sampling->doc);
+        
+        // Add cage entry with size and type
+        $cageInfo = '(No. ' . $sampling->cage_no . ', weight ' . $weightKg . ' kg';
+        if ($avgLength) {
+            $cageInfo .= ', length ' . $avgLength . ' cm';
+        }
+        if ($avgWidth) {
+            $cageInfo .= ', width ' . $avgWidth . ' cm';
+        }
+        $cageInfo .= ', type: ' . ($feedTypeName ?? 'N/A') . ')';
+        $sheet->setCellValue('A7', 'Cage Information: ' . $cageInfo);
+        $sheet->getStyle('A7')->getFont()->setBold(true);
 
         // Sample data headers
-        $sheet->setCellValue('A8', 'No.');
-        $sheet->setCellValue('B8', 'Weight (g)');
-        $sheet->setCellValue('C8', 'No.');
-        $sheet->setCellValue('D8', 'Weight (g)');
-        $sheet->setCellValue('E8', 'No.');
-        $sheet->setCellValue('F8', 'Weight (g)');
+        $sheet->setCellValue('A9', 'No.');
+        $sheet->setCellValue('B9', 'Weight (g)');
+        $sheet->setCellValue('C9', 'No.');
+        $sheet->setCellValue('D9', 'Weight (g)');
+        $sheet->setCellValue('E9', 'No.');
+        $sheet->setCellValue('F9', 'Weight (g)');
 
         // Get samples and organize them sequentially across 3 columns
         // Column 1: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
@@ -482,7 +552,7 @@ class SamplingController extends Controller
         // Column 3: 21, 22, 23, 24, 25, 26, 27, 28, 29, 30
         $samples = $sampling->samples->sortBy('sample_no')->values();
         $samplesPerColumn = (int) ceil($samples->count() / 3);
-        $row = 9;
+        $row = 10;
         
         for ($rowIndex = 0; $rowIndex < $samplesPerColumn; $rowIndex++) {
             $col1Index = $rowIndex;                    // Column 1: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (samples 1-10)
@@ -507,10 +577,7 @@ class SamplingController extends Controller
             $row++;
         }
 
-        // Calculate summary statistics
-        $totalWeight = $samples->sum('weight');
-        $totalSamples = $samples->count();
-        $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
+        // Summary statistics already calculated above
 
         // Summary section
         $summaryRow = $row + 2;

@@ -11,9 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('samples', function (Blueprint $table) {
-            $table->float('length')->nullable()->after('weight');
-            $table->float('width')->nullable()->after('length');
+        Schema::table('cages', function (Blueprint $table) {
+            $table->string('type')->nullable()->after('number_of_fingerlings'); // 'grower' or 'finisher'
         });
     }
 
@@ -22,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('samples', function (Blueprint $table) {
-            $table->dropColumn(['length', 'width']);
+        Schema::table('cages', function (Blueprint $table) {
+            $table->dropColumn('type');
         });
     }
 };

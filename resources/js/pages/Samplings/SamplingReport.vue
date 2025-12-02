@@ -3,12 +3,14 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 
 // Props from Inertia
 const props = defineProps<{
   sampling?: any;
+  cageEntry?: any;
   samples?: any[];
   totals?: any;
   history?: any[];
@@ -69,13 +71,20 @@ const organizedSamples = computed(() => {
     const col2Index = row + samplesPerColumn; // Column 2: 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 (samples 11-20)
     const col3Index = row + samplesPerColumn * 2; // Column 3: 20, 21, 22, 23, 24, 25, 26, 27, 28, 29 (samples 21-30)
     
+    const sample1 = sortedSamples[col1Index];
+    const sample2 = sortedSamples[col2Index];
+    const sample3 = sortedSamples[col3Index];
+    
     const rowData = {
-      no: sortedSamples[col1Index]?.sample_no || '',
-      weight: roundToTenth(sortedSamples[col1Index]?.weight),
-      no2: sortedSamples[col2Index]?.sample_no || '',
-      weight2: roundToTenth(sortedSamples[col2Index]?.weight),
-      no3: sortedSamples[col3Index]?.sample_no || '',
-      weight3: roundToTenth(sortedSamples[col3Index]?.weight),
+      no: sample1?.sample_no || '',
+      weight: roundToTenth(sample1?.weight),
+      sample1: sample1,
+      no2: sample2?.sample_no || '',
+      weight2: roundToTenth(sample2?.weight),
+      sample2: sample2,
+      no3: sample3?.sample_no || '',
+      weight3: roundToTenth(sample3?.weight),
+      sample3: sample3,
     };
     organized.push(rowData);
   }
@@ -94,6 +103,61 @@ const biomassAnalysis = computed(() => {
     biomassPerFish: roundToTenth(biomassPerFish).toFixed(1),
     biomassGrowthRate: biomassGrowthRate.toFixed(1),
     biomassEfficiency: totals.avgWeight > 0 ? (totals.biomass / totals.avgWeight * 1000).toFixed(2) : '0.00'
+  };
+});
+
+// Computed property for cage entry format
+const cageEntryFormat = computed(() => {
+  if (!props.cageEntry) return '';
+  
+  const parts = [
+    `No. ${props.cageEntry.cageNo}`,
+    `weight ${props.cageEntry.weight} kg`
+  ];
+  
+  if (props.cageEntry.length) {
+    parts.push(`length ${props.cageEntry.length} cm`);
+  }
+  
+  if (props.cageEntry.width) {
+    parts.push(`width ${props.cageEntry.width} cm`);
+  }
+  
+  parts.push(`type: ${props.cageEntry.type || 'N/A'}`);
+  
+  return `(${parts.join(', ')})`;
+});
+
+// Computed property for tooltip data (average values from all samples)
+const tooltipData = computed(() => {
+  const samples = report.value.samples || [];
+  if (samples.length === 0) {
+    return {
+      avgWeight: 0,
+      avgLength: null,
+      avgWidth: null,
+      type: props.cageEntry?.type || 'N/A'
+    };
+  }
+  
+  const totalWeight = samples.reduce((sum: number, sample: any) => sum + (sample.weight || 0), 0);
+  const avgWeight = samples.length > 0 ? totalWeight / samples.length : 0;
+  
+  const samplesWithLength = samples.filter((s: any) => s.length != null);
+  const avgLength = samplesWithLength.length > 0 
+    ? samplesWithLength.reduce((sum: number, sample: any) => sum + (sample.length || 0), 0) / samplesWithLength.length 
+    : null;
+  
+  const samplesWithWidth = samples.filter((s: any) => s.width != null);
+  const avgWidth = samplesWithWidth.length > 0 
+    ? samplesWithWidth.reduce((sum: number, sample: any) => sum + (sample.width || 0), 0) / samplesWithWidth.length 
+    : null;
+  
+  return {
+    avgWeight: roundToTenth(avgWeight),
+    avgLength: avgLength ? roundToTenth(avgLength) : null,
+    avgWidth: avgWidth ? roundToTenth(avgWidth) : null,
+    type: props.cageEntry?.type || 'N/A'
   };
 });
 
@@ -132,34 +196,125 @@ const exportToExcel = () => {
             <div class="text-sm text-muted-foreground">Cage No: <span class="font-medium">{{ report.cageNo }}</span></div>
             <div class="text-sm text-muted-foreground">DOC: <span class="font-medium">{{ report.doc }}</span></div>
           </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
           <div class="flex gap-2">
             <Button variant="outline" @click="printReport">🖨️ Print Report</Button>
             <Button variant="secondary" @click="exportToExcel">📊 Export to Excel</Button>
           </div>
         </div>
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
-          <table class="min-w-full text-xs md:text-sm">
-            <thead class="bg-gray-50 dark:bg-gray-800">
-              <tr>
-                <th class="px-2 py-2">No.</th>
-                <th class="px-2 py-2">Weight (g)</th>
-                <th class="px-2 py-2">No.</th>
-                <th class="px-2 py-2">Weight (g)</th>
-                <th class="px-2 py-2">No.</th>
-                <th class="px-2 py-2">Weight (g)</th>
-              </tr>
-            </thead>
+          <TooltipProvider>
+            <table class="min-w-full text-xs md:text-sm">
+              <thead class="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th class="px-2 py-2">No.</th>
+                  <th class="px-2 py-2">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <span class="cursor-help underline decoration-dotted">Weight (g)</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div class="space-y-1 text-xs">
+                          <div><strong>Weight:</strong> {{ tooltipData.avgWeight.toFixed(1) }} g (avg)</div>
+                          <div v-if="tooltipData.avgLength"><strong>Length:</strong> {{ tooltipData.avgLength.toFixed(1) }} cm (avg)</div>
+                          <div v-if="tooltipData.avgWidth"><strong>Width:</strong> {{ tooltipData.avgWidth.toFixed(1) }} cm (avg)</div>
+                          <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </th>
+                  <th class="px-2 py-2">No.</th>
+                  <th class="px-2 py-2">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <span class="cursor-help underline decoration-dotted">Weight (g)</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div class="space-y-1 text-xs">
+                          <div><strong>Weight:</strong> {{ tooltipData.avgWeight.toFixed(1) }} g (avg)</div>
+                          <div v-if="tooltipData.avgLength"><strong>Length:</strong> {{ tooltipData.avgLength.toFixed(1) }} cm (avg)</div>
+                          <div v-if="tooltipData.avgWidth"><strong>Width:</strong> {{ tooltipData.avgWidth.toFixed(1) }} cm (avg)</div>
+                          <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </th>
+                  <th class="px-2 py-2">No.</th>
+                  <th class="px-2 py-2">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <span class="cursor-help underline decoration-dotted">Weight (g)</span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div class="space-y-1 text-xs">
+                          <div><strong>Weight:</strong> {{ tooltipData.avgWeight.toFixed(1) }} g (avg)</div>
+                          <div v-if="tooltipData.avgLength"><strong>Length:</strong> {{ tooltipData.avgLength.toFixed(1) }} cm (avg)</div>
+                          <div v-if="tooltipData.avgWidth"><strong>Width:</strong> {{ tooltipData.avgWidth.toFixed(1) }} cm (avg)</div>
+                          <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </th>
+                </tr>
+              </thead>
             <tbody>
               <tr v-for="row in organizedSamples" :key="row.no">
                 <td class="px-2 py-1">{{ row.no }}</td>
-                <td class="px-2 py-1">{{ row.weight ? row.weight.toFixed(1) : '' }}</td>
+                <td class="px-2 py-1">
+                  <Tooltip v-if="row.sample1">
+                    <TooltipTrigger as-child>
+                      <span class="cursor-help underline decoration-dotted">{{ row.weight ? row.weight.toFixed(1) : '' }}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div class="space-y-1 text-xs">
+                        <div><strong>Weight:</strong> {{ row.weight.toFixed(1) }} g</div>
+                        <div v-if="row.sample1.length"><strong>Length:</strong> {{ roundToTenth(row.sample1.length).toFixed(1) }} cm</div>
+                        <div v-if="row.sample1.width"><strong>Width:</strong> {{ roundToTenth(row.sample1.width).toFixed(1) }} cm</div>
+                        <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span v-else>{{ row.weight ? row.weight.toFixed(1) : '' }}</span>
+                </td>
                 <td class="px-2 py-1">{{ row.no2 }}</td>
-                <td class="px-2 py-1">{{ row.weight2 ? row.weight2.toFixed(1) : '' }}</td>
+                <td class="px-2 py-1">
+                  <Tooltip v-if="row.sample2">
+                    <TooltipTrigger as-child>
+                      <span class="cursor-help underline decoration-dotted">{{ row.weight2 ? row.weight2.toFixed(1) : '' }}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div class="space-y-1 text-xs">
+                        <div><strong>Weight:</strong> {{ row.weight2.toFixed(1) }} g</div>
+                        <div v-if="row.sample2.length"><strong>Length:</strong> {{ roundToTenth(row.sample2.length).toFixed(1) }} cm</div>
+                        <div v-if="row.sample2.width"><strong>Width:</strong> {{ roundToTenth(row.sample2.width).toFixed(1) }} cm</div>
+                        <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span v-else>{{ row.weight2 ? row.weight2.toFixed(1) : '' }}</span>
+                </td>
                 <td class="px-2 py-1">{{ row.no3 }}</td>
-                <td class="px-2 py-1">{{ row.weight3 ? row.weight3.toFixed(1) : '' }}</td>
+                <td class="px-2 py-1">
+                  <Tooltip v-if="row.sample3">
+                    <TooltipTrigger as-child>
+                      <span class="cursor-help underline decoration-dotted">{{ row.weight3 ? row.weight3.toFixed(1) : '' }}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <div class="space-y-1 text-xs">
+                        <div><strong>Weight:</strong> {{ row.weight3.toFixed(1) }} g</div>
+                        <div v-if="row.sample3.length"><strong>Length:</strong> {{ roundToTenth(row.sample3.length).toFixed(1) }} cm</div>
+                        <div v-if="row.sample3.width"><strong>Width:</strong> {{ roundToTenth(row.sample3.width).toFixed(1) }} cm</div>
+                        <div><strong>Type:</strong> {{ tooltipData.type }}</div>
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span v-else>{{ row.weight3 ? row.weight3.toFixed(1) : '' }}</span>
+                </td>
               </tr>
             </tbody>
           </table>
+          </TooltipProvider>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>

@@ -14,6 +14,7 @@ class Sampling extends Model
         'doc',
         'cage_no',
         'mortality',
+        'feed_types_id',
     ];
 
     public function investor() {
@@ -26,5 +27,9 @@ class Sampling extends Model
 
     public function cage() {
         return $this->belongsTo(Cage::class, 'cage_no');
+    }
+
+    public function feedType() {
+        return $this->belongsTo(\App\Models\FeedType::class, 'feed_types_id');
     }
 }
