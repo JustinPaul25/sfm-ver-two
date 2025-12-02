@@ -23,7 +23,7 @@ class SampleSeeder extends Seeder
             return;
         }
 
-        // Create 30 samples for each sampling
+        // Create 5 samples for each sampling
         foreach ($samplings as $sampling) {
             // Determine base weight based on how old the fish are (sampling date)
             $daysOld = abs(now()->diffInDays($sampling->date_sampling));
@@ -40,33 +40,33 @@ class SampleSeeder extends Seeder
                 $baseWeight = 230 + (($daysOld - 90) * 1); // Grow 1g/day when very mature
             }
             
-            // Create 30 samples with realistic weight variations
-            for ($i = 1; $i <= 30; $i++) {
+            // Create 5 samples with realistic weight variations
+            for ($i = 1; $i <= 5; $i++) {
                 // Generate realistic weight with variation (similar to SamplingController)
                 // Base weight range with variation
                 $weightVariation = rand(-50, 50); // Add variation between -50g and +50g
                 $weight = max(30, round($baseWeight + $weightVariation, 2)); // Minimum 30g
-                
-                // Calculate length and width based on weight (realistic fish proportions)
-                // Using proportional relationships: length and width scale with weight
-                // For fish: length typically 4-6x the cube root of weight, width typically 0.8-1.2x length
-                // Converting to realistic cm measurements for grams
-                $length = round(sqrt($weight / 10) * 2.5, 2); // Proportional to weight
-                $width = round($length * 1.2, 2); // Width is typically 1.2x length
-                
+            
+            // Calculate length and width based on weight (realistic fish proportions)
+            // Using proportional relationships: length and width scale with weight
+            // For fish: length typically 4-6x the cube root of weight, width typically 0.8-1.2x length
+            // Converting to realistic cm measurements for grams
+            $length = round(sqrt($weight / 10) * 2.5, 2); // Proportional to weight
+            $width = round($length * 1.2, 2); // Width is typically 1.2x length
+            
                 // Create sample
-                Sample::create([
-                    'investor_id' => $sampling->investor_id,
-                    'sampling_id' => $sampling->id,
+            Sample::create([
+                'investor_id' => $sampling->investor_id,
+                'sampling_id' => $sampling->id,
                     'sample_no' => $i,
-                    'weight' => $weight,
-                    'length' => $length,
-                    'width' => $width,
-                ]);
+                'weight' => $weight,
+                'length' => $length,
+                'width' => $width,
+            ]);
             }
         }
 
         $this->command->info('Samples seeded successfully!');
-        $this->command->info('Created 30 samples per sampling for ' . $samplings->count() . ' samplings.');
+        $this->command->info('Created 5 samples per sampling for ' . $samplings->count() . ' samplings.');
     }
 }

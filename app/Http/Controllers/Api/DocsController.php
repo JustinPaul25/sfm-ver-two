@@ -99,8 +99,8 @@ class DocsController extends Controller
             ->where('doc', $request->input('doc'))
             ->firstOrFail();
 
-        // Ensure there are always 30 sample slots for this sampling (1-30)
-        $desiredSampleCount = 30;
+        // Ensure there are always 5 sample slots for this sampling (1-5)
+        $desiredSampleCount = 5;
         
         // Get all existing sample numbers for this sampling (convert to integers for proper comparison)
         $existingSampleNos = Sample::where('sampling_id', $sampling->id)
@@ -110,7 +110,7 @@ class DocsController extends Controller
             })
             ->toArray();
         
-        // Create any missing samples from 1 to 30
+        // Create any missing samples from 1 to 5
         for ($i = 1; $i <= $desiredSampleCount; $i++) {
             if (!in_array($i, $existingSampleNos)) {
                 Sample::create([
@@ -130,7 +130,7 @@ class DocsController extends Controller
             ->first();
 
         if (!$current_sample) {
-            // All 30 samples have already been filled
+            // All 5 samples have already been filled
             return response()->json(['message' => 'All data is filled in this sampling.'], 422);
         }
 
@@ -142,7 +142,7 @@ class DocsController extends Controller
             ]);
 
             // Recalculate statistics for the sampling
-            $desiredSampleCount = 30;
+            $desiredSampleCount = 5;
             $total_weight = Sample::where('sampling_id', $sampling->id)->sum('weight');
             $has_data_count = Sample::where('weight', '>', 0)
                 ->where('sampling_id', $sampling->id)
@@ -151,7 +151,7 @@ class DocsController extends Controller
             // Calculate Average Body Weight (ABW)
             $abw = $has_data_count > 0 ? round($total_weight / $has_data_count, 3) : 0;
 
-            // Remaining samples = total slots (30) - filled slots
+            // Remaining samples = total slots (5) - filled slots
             $remaining_samples = max(0, $desiredSampleCount - $has_data_count);
 
             // If you want to update sampling with these stats, uncomment below

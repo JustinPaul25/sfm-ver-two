@@ -314,9 +314,9 @@ class SamplingController extends Controller
             ], 400);
         }
 
-        // Generate 30 samples with realistic weight data
+        // Generate 5 samples with realistic weight data
         $samples = [];
-        for ($i = 1; $i <= 30; $i++) {
+        for ($i = 1; $i <= 5; $i++) {
             // Generate realistic weight between 50-500 grams
             $baseWeight = rand(150, 350); // Base weight range
             $variation = rand(-50, 50); // Add some variation
@@ -336,8 +336,8 @@ class SamplingController extends Controller
         Sample::insert($samples);
 
         return response()->json([
-            'message' => '30 samples generated successfully',
-            'samples_count' => 30,
+            'message' => '5 samples generated successfully',
+            'samples_count' => 5,
             'sampling_id' => $sampling->id
         ]);
     }
