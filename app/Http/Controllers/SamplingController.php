@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Sampling;
 use App\Models\Sample;
+use App\Models\CageFeedConsumption;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -224,37 +225,84 @@ class SamplingController extends Controller
                 $historicalSamplings = Sampling::with('samples')
                     ->where('investor_id', $sampling->investor_id)
                     ->orderBy('date_sampling', 'asc')
-                    ->get()
-                    ->map(function ($s) use ($numberOfFish) {
-                        $samples = $s->samples;
-                        $totalWeight = $samples->sum('weight');
-                        $totalSamples = $samples->count();
-                        $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
-                        $sMortality = $s->mortality ?? 0;
-                        $sPresentStocks = $numberOfFish - $sMortality;
+                    ->get();
+                
+                $previousBiomass = null;
+                $previousDate = null;
+                
+                $historicalData = $historicalSamplings->map(function ($s, $index) use ($numberOfFish, &$previousBiomass, &$previousDate, $historicalSamplings) {
+                    $samples = $s->samples;
+                    $totalWeight = $samples->sum('weight');
+                    $totalSamples = $samples->count();
+                    $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
+                    $sMortality = $s->mortality ?? 0;
+                    $sPresentStocks = $numberOfFish - $sMortality;
+                    
+                    // Calculate biomass for each historical sampling using present stocks
+                    $biomass = round(($avgWeight * $sPresentStocks) / 1000, 2);
+                    $feedingRate = 3; // Default feeding rate percentage
+                    // Daily Feed Ration = (Total Stocks × Avg Body Weight × Feeding Rate) / 1000
+                    $dailyFeedRation = round(($numberOfFish * $avgWeight * ($feedingRate / 100)) / 1000, 2);
+                    
+                    // Calculate feed consumed from CageFeedConsumption records
+                    // Get feed consumed between this sampling and the previous one (or from start if first)
+                    $feedConsumed = 0;
+                    if ($s->cage_no) {
+                        $startDate = $previousDate ? Carbon::parse($previousDate)->addDay() : null;
+                        $endDate = Carbon::parse($s->date_sampling);
                         
-                        // Calculate biomass for each historical sampling using present stocks
-                        $biomass = round(($avgWeight * $sPresentStocks) / 1000, 2);
-                        $feedingRate = 3; // Default feeding rate percentage
-                        // Daily Feed Ration = (Total Stocks × Avg Body Weight × Feeding Rate) / 1000
-                        $dailyFeedRation = round(($numberOfFish * $avgWeight * ($feedingRate / 100)) / 1000, 2);
+                        $feedQuery = CageFeedConsumption::where('cage_id', $s->cage_no)
+                            ->where('consumption_date', '<=', $endDate);
                         
-                        return [
-                            'date' => $s->date_sampling,
-                            'doc' => $s->doc,
-                            'stocks' => $numberOfFish,
+                        if ($startDate) {
+                            $feedQuery->where('consumption_date', '>=', $startDate);
+                        }
+                        
+                        $feedConsumed = round($feedQuery->sum('feed_amount'), 2);
+                    }
+                    
+                    // Calculate total weight gained (biomass difference from previous sampling)
+                    $totalGained = 0;
+                    $wtInc = 0;
+                    if ($previousBiomass !== null && $previousDate) {
+                        $totalGained = round($biomass - $previousBiomass, 2);
+                        
+                        // Calculate weight increment per day
+                        $daysBetween = Carbon::parse($previousDate)->diffInDays(Carbon::parse($s->date_sampling));
+                        if ($daysBetween > 0) {
+                            $wtInc = round(($totalGained * 1000) / $daysBetween, 1); // Convert kg to grams per day
+                        }
+                    }
+                    
+                    // Calculate FCR (Feed Conversion Ratio) = Feed Consumed / Total Weight Gained
+                    $fcr = 0;
+                    if ($totalGained > 0 && $feedConsumed > 0) {
+                        $fcr = round($feedConsumed / $totalGained, 2);
+                    } elseif ($totalGained < 0 && $feedConsumed > 0) {
+                        // Negative FCR indicates weight loss despite feeding
+                        $fcr = round($feedConsumed / abs($totalGained), 2);
+                    }
+                    
+                    // Update for next iteration
+                    $previousBiomass = $biomass;
+                    $previousDate = $s->date_sampling;
+                    
+                    return [
+                        'date' => $s->date_sampling,
+                        'doc' => $s->doc,
+                        'stocks' => $numberOfFish,
                         'mortality' => $sMortality,
                         'present' => $sPresentStocks,
-                            'abw' => $avgWeight,
-                            'wtInc' => 0, // Can be calculated from previous sampling
-                            'biomass' => $biomass,
-                            'fr' => '3%', // Default value
-                            'dfr' => $dailyFeedRation, // Daily Feed Ration = Biomass × Feeding Rate
-                            'feed' => 0, // Default value
-                            'totalGained' => 0, // Can be calculated
-                            'fcr' => 0, // Can be calculated
-                        ];
-                    });
+                        'abw' => $avgWeight,
+                        'wtInc' => $wtInc,
+                        'biomass' => $biomass,
+                        'fr' => '3%', // Default value
+                        'dfr' => $dailyFeedRation,
+                        'feed' => $feedConsumed,
+                        'totalGained' => $totalGained,
+                        'fcr' => $fcr,
+                    ];
+                });
                 
                 // Create cage entry with size and feed type (one entry per cage)
                 $cageEntry = [
@@ -292,7 +340,7 @@ class SamplingController extends Controller
                         'dailyWtGained' => $dailyWtGained,
                         'fcr' => 0, // Can be calculated
                     ],
-                    'history' => $historicalSamplings,
+                    'history' => $historicalData,
                 ];
                 
                 return Inertia::render('Samplings/SamplingReport', $reportData);
