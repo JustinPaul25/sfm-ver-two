@@ -519,7 +519,7 @@ const getPerFingerlingAmount = (cageId: number) => {
                                 {{ getScheduleDetails(cage.id)?.schedule?.notes }}
                               </div>
                               <p class="text-xs text-muted-foreground mt-2" v-if="getScheduleDetails(cage.id)?.schedule?.created_at">
-                                Created: {{ new Date(getScheduleDetails(cage.id)?.schedule?.created_at || '').toLocaleString() }}
+                                Created: {{ new Date(getScheduleDetails(cage.id)?.schedule?.created_at || '').toLocaleString('en-US', { timeZone: 'Asia/Manila' }) }}
                               </p>
                             </div>
                           </div>

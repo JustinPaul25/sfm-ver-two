@@ -136,9 +136,15 @@ class DocsController extends Controller
 
         DB::beginTransaction();
         try {
-            // Update the current sample with calculated weight
+            // Get original height and width values (in cm) from request
+            $originalHeight = $request->input('height'); // This is length in cm
+            $originalWidth = $request->input('width'); // This is width in cm
+            
+            // Update the current sample with calculated weight, length, and width
             $current_sample->update([
-                'weight' => round($final_weight, 3)
+                'weight' => round($final_weight, 3),
+                'length' => round($originalHeight, 2), // Save height as length in cm
+                'width' => round($originalWidth, 2),  // Save width in cm
             ]);
 
             // Recalculate statistics for the sampling
