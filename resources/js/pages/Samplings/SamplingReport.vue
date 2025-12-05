@@ -50,6 +50,30 @@ const roundToTenth = (value: number | string | undefined): number => {
   return Math.round(num * 10) / 10;
 };
 
+// Helper function to format timestamp in a human-readable way
+const formatTimestamp = (timestamp: string | null | undefined): string => {
+  if (!timestamp) return '-';
+  
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '-';
+    
+    // Format as "Jan 15, 2024 at 2:30 PM"
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    };
+    
+    return date.toLocaleString('en-US', options);
+  } catch (error) {
+    return '-';
+  }
+};
+
 // Computed properties for sample data organization
 // Organize samples in a single column (1-5)
 const organizedSamples = computed(() => {
@@ -63,6 +87,7 @@ const organizedSamples = computed(() => {
     length: sample.length ? roundToTenth(sample.length) : null,
     width: sample.width ? roundToTenth(sample.width) : null,
     type: tooltipData.value.type,
+    testedAt: formatTimestamp(sample.created_at),
   }));
 });
 
@@ -210,6 +235,7 @@ const exportToExcel = () => {
                 <th class="px-4 py-2 text-left">Length (cm)</th>
                 <th class="px-4 py-2 text-left">Width (cm)</th>
                 <th class="px-4 py-2 text-left">Type</th>
+                <th class="px-4 py-2 text-left">Tested At</th>
               </tr>
             </thead>
             <tbody>
@@ -219,6 +245,7 @@ const exportToExcel = () => {
                 <td class="px-4 py-2">{{ row.length ? row.length.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.width ? row.width.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.type }}</td>
+                <td class="px-4 py-2">{{ row.testedAt }}</td>
               </tr>
             </tbody>
           </table>
