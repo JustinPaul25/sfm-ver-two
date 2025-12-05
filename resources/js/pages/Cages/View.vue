@@ -86,6 +86,27 @@ const averageDailyFeed = computed(() => {
   return totalFeedConsumed.value / feedConsumptions.value.length;
 });
 
+// Helper function to format date in a human-readable way
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return '-';
+  
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '-';
+    
+    // Format as "Jan 15, 2024"
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    };
+    
+    return date.toLocaleDateString('en-US', options);
+  } catch (error) {
+    return '-';
+  }
+};
+
 // Methods
 const loadCageData = async () => {
   // Cage data is already loaded from props
@@ -273,7 +294,7 @@ onMounted(() => {
               <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 <tr v-for="consumption in feedConsumptions" :key="consumption.id">
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{{ consumption.day_number }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">{{ consumption.consumption_date }}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">{{ formatDate(consumption.consumption_date) }}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">{{ consumption.feed_amount }} kg</td>
                   <td class="px-6 py-4 text-sm">{{ consumption.notes || '-' }}</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">

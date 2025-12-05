@@ -315,16 +315,6 @@ onMounted(() => {
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    @click="generateSamples(s?.id)" 
-                    :disabled="!s?.id"
-                    title="Generate Samples"
-                    class="w-8 h-8 p-0"
-                  >
-                    📊
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
                     @click="printSamplingReport(s?.id)" 
                     :disabled="!s?.id"
                     title="Print Report"
