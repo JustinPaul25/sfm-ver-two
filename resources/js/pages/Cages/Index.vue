@@ -4,7 +4,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useCageStore } from '@/Stores/CageStore';
 import { useFeedTypeStore } from '@/Stores/FeedTypeStore';
 import { useInvestorStore } from '@/Stores/InvestorStore';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
+import { type SharedData } from '@/types';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Dialog from '@/components/ui/dialog/Dialog.vue';
@@ -14,6 +15,10 @@ import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
 import Swal from 'sweetalert2';
+
+const page = usePage<SharedData>();
+const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
+const isInvestor = computed(() => userRole.value === 'investor');
 
 interface Cage {
   id: number;
@@ -267,12 +272,13 @@ onMounted(() => {
           <Input v-model="search" placeholder="Search cages..." @keyup.enter="handleSearch" class="w-64" />
           <Button @click="handleSearch" variant="default">Search</Button>
         </div>
-        <Button @click="openCreateDialog" variant="secondary">Create Cage</Button>
+        <Button v-if="!isInvestor" @click="openCreateDialog" variant="secondary">Create Cage</Button>
       </div>
       <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-white dark:bg-gray-900">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-800">
             <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cage Number</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Number of Fingerlings</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feed Type</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Investor</th>
@@ -281,12 +287,13 @@ onMounted(() => {
           </thead>
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="store.loading" class="animate-pulse">
-              <td colspan="4" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+              <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading...</td>
             </tr>
             <tr v-else-if="cages.length === 0">
-              <td colspan="4" class="px-6 py-4 text-center text-gray-500">No cages found.</td>
+              <td colspan="5" class="px-6 py-4 text-center text-gray-500">No cages found.</td>
             </tr>
             <tr v-else v-for="c in cages" :key="c?.id">
+              <td class="px-6 py-4 whitespace-nowrap font-medium">{{ c?.id }}</td>
               <td class="px-6 py-4 whitespace-nowrap">{{ c?.number_of_fingerlings }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 {{ feedTypes.find(f => f.id === c?.feed_types_id)?.feed_type || c?.feed_types_id }}
@@ -307,6 +314,7 @@ onMounted(() => {
                     </Button>
                   </Link>
                   <Button 
+                    v-if="!isInvestor"
                     variant="secondary" 
                     size="sm" 
                     @click="openEditDialog(c)" 
@@ -317,6 +325,7 @@ onMounted(() => {
                     ✏️
                   </Button>
                   <Button 
+                    v-if="!isInvestor"
                     variant="destructive" 
                     size="sm" 
                     @click="confirmDelete(c?.id)" 

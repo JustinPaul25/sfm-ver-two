@@ -3,13 +3,56 @@
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
+import { type NavItem, type SharedData } from '@/types';
+import { Link, usePage } from '@inertiajs/vue3';
 // import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
 import { LayoutGrid, Users, File, List, BarChart3, Clock } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
+import { computed } from 'vue';
 
-const mainNavItems: NavItem[] = [
+const page = usePage<SharedData>();
+const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
+
+// Menu items for farmers
+const farmerNavItems: NavItem[] = [
+    {
+        title: 'Samplings',
+        href: '/samplings',
+        icon: File,
+    },
+    {
+        title: 'Feed Types',
+        href: '/feed-types',
+        icon: List,
+    },
+    {
+        title: 'Cages',
+        href: '/cages',
+        icon: List,
+    },
+    {
+        title: 'Feeding Schedules',
+        href: '/cages/feeding-schedules',
+        icon: Clock,
+    },
+];
+
+// Menu items for investors (view-only)
+const investorNavItems: NavItem[] = [
+    {
+        title: 'Samplings',
+        href: '/samplings',
+        icon: File,
+    },
+    {
+        title: 'Cages',
+        href: '/cages',
+        icon: List,
+    },
+];
+
+// Menu items for admin (all items)
+const adminNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: '/dashboard',
@@ -46,6 +89,16 @@ const mainNavItems: NavItem[] = [
         icon: BarChart3,
     },
 ];
+
+const mainNavItems = computed(() => {
+    if (userRole.value === 'investor') {
+        return investorNavItems;
+    } else if (userRole.value === 'admin') {
+        return adminNavItems;
+    } else {
+        return farmerNavItems;
+    }
+});
 
 // const footerNavItems: NavItem[] = [
 //     {

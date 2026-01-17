@@ -20,11 +20,19 @@ class SamplingController extends Controller
 
     public function list(Request $request)
     {
+        $user = $request->user();
         $query = Sampling::with('investor')->withCount('samples')
             // Hide samplings whose investor has been soft-deleted
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });
+
+        // Farmers can only see samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $query->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
 
         if ($request->filled('search')) {
             $search = $request->get('search');
@@ -56,6 +64,15 @@ class SamplingController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
+        
+        // Investors cannot create samplings
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot create samplings'
+            ], 403);
+        }
+
         $request->validate([
             'investor_id' => 'required|exists:investors,id',
             'date_sampling' => 'required|date',
@@ -75,6 +92,13 @@ class SamplingController extends Controller
             if ($cage && $cage->feed_types_id) {
                 $data['feed_types_id'] = $cage->feed_types_id;
             }
+
+            // Farmers can only create samplings for their own cages
+            if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only create samplings for your own cages'
+                ], 403);
+            }
         }
 
         // Auto-generate a unique DOC value based on the sampling date
@@ -90,6 +114,25 @@ class SamplingController extends Controller
 
     public function update(Request $request, Sampling $sampling)
     {
+        $user = $request->user();
+        
+        // Investors cannot update samplings
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot update samplings'
+            ], 403);
+        }
+
+        // Farmers can only update samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $cage = $sampling->cage;
+            if (!$cage || $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only update samplings for your own cages'
+                ], 403);
+            }
+        }
+
         $request->validate([
             'investor_id' => 'required|exists:investors,id',
             'date_sampling' => 'required|date',
@@ -108,6 +151,13 @@ class SamplingController extends Controller
             if ($cage && $cage->feed_types_id) {
                 $data['feed_types_id'] = $cage->feed_types_id;
             }
+
+            // Farmers can only update samplings for their own cages
+            if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only update samplings for your own cages'
+                ], 403);
+            }
         }
 
         // Preserve existing DOC; do not allow it to be changed from the request
@@ -121,8 +171,27 @@ class SamplingController extends Controller
         ]);
     }
 
-    public function destroy(Sampling $sampling)
+    public function destroy(Request $request, Sampling $sampling)
     {
+        $user = $request->user();
+        
+        // Investors cannot delete samplings
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot delete samplings'
+            ], 403);
+        }
+
+        // Farmers can only delete samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $cage = $sampling->cage;
+            if (!$cage || $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only delete samplings for your own cages'
+                ], 403);
+            }
+        }
+
         // Delete related samples first to satisfy foreign key constraints
         $sampling->samples()->delete();
 
@@ -320,6 +389,8 @@ class SamplingController extends Controller
                         'investor' => $sampling->investor->name,
                         'cageNo' => $sampling->cage_no,
                         'doc' => $sampling->doc,
+                        'created_at' => $sampling->created_at,
+                        'updated_at' => $sampling->updated_at,
                     ],
                     'cageEntry' => $cageEntry, // One entry per cage with size and type
                     'samples' => $samples->sortBy('sample_no')->values(),

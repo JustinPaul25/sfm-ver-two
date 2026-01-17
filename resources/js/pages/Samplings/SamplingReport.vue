@@ -5,6 +5,12 @@ import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+import FishDetectionCamera from '@/components/FishDetectionCamera.vue';
+import Dialog from '@/components/ui/dialog/Dialog.vue';
+import DialogContent from '@/components/ui/dialog/DialogContent.vue';
+import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
+import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
+import DialogTrigger from '@/components/ui/dialog/DialogTrigger.vue';
 
 // Props from Inertia
 const props = defineProps<{
@@ -14,6 +20,11 @@ const props = defineProps<{
   totals?: any;
   history?: any[];
 }>();
+
+// Helper function to format timestamp in a human-readable way (reuse from existing function)
+const formatSamplingTimestamp = (timestamp: string | null | undefined): string => {
+  return formatTimestamp(timestamp);
+};
 
 // Reactive data
 const report = ref({
@@ -41,6 +52,17 @@ const report = ref({
   },
   history: props.history || [],
 });
+
+// Fish detection state
+const showDetectionDialog = ref(false);
+const cameraRef = ref<InstanceType<typeof FishDetectionCamera> | null>(null);
+const aiPredictions = ref<{
+  length: number;
+  width: number;
+  weight: number;
+  stage: string;
+  timestamp: string;
+}[]>([]);
 
 // Helper function to round to nearest tenth (1 decimal place)
 const roundToTenth = (value: number | string | undefined): number => {
@@ -180,6 +202,62 @@ const exportToExcel = () => {
     window.open(route('samplings.export-report'), '_blank');
   }
 };
+
+// Handle detection from camera
+const handleDetection = (detection: any) => {
+  console.log('Fish detected:', detection);
+  
+  // Add to AI predictions
+  aiPredictions.value.unshift({
+    length: detection.length,
+    width: detection.width,
+    weight: detection.weight,
+    stage: detection.stage,
+    timestamp: detection.timestamp,
+  });
+  
+  // Keep only last 5 predictions
+  if (aiPredictions.value.length > 5) {
+    aiPredictions.value.pop();
+  }
+  
+  // Update the report samples if needed
+  // You can add logic here to save the detection to the database
+};
+
+const handleDetectionError = (error: string) => {
+  console.error('Detection error:', error);
+  // You can show a toast notification here
+};
+
+const openDetectionCamera = () => {
+  showDetectionDialog.value = true;
+};
+
+// Computed average from AI predictions
+const aiAverages = computed(() => {
+  if (aiPredictions.value.length === 0) {
+    return null;
+  }
+  
+  const total = aiPredictions.value.reduce(
+    (acc, pred) => ({
+      length: acc.length + pred.length,
+      width: acc.width + pred.width,
+      weight: acc.weight + pred.weight,
+    }),
+    { length: 0, width: 0, weight: 0 }
+  );
+  
+  const count = aiPredictions.value.length;
+  
+  return {
+    length: (total.length / count).toFixed(1),
+    width: (total.width / count).toFixed(1),
+    weight: (total.weight / count).toFixed(1),
+    count,
+  };
+});
 </script>
 
 <template>
@@ -194,12 +272,36 @@ const exportToExcel = () => {
             <div class="text-sm text-muted-foreground">Investor: <span class="font-medium">{{ report.investor }}</span></div>
             <div class="text-sm text-muted-foreground">Cage No: <span class="font-medium">{{ report.cageNo }}</span></div>
             <div class="text-sm text-muted-foreground">DOC: <span class="font-medium">{{ report.doc }}</span></div>
+            <div v-if="props.sampling?.created_at" class="text-sm text-muted-foreground mt-2">
+              <span class="font-medium">Data Entered:</span> {{ formatSamplingTimestamp(props.sampling.created_at) }}
+            </div>
+            <div v-if="props.sampling?.updated_at && props.sampling?.updated_at !== props.sampling?.created_at" class="text-sm text-muted-foreground">
+              <span class="font-medium">Last Updated:</span> {{ formatSamplingTimestamp(props.sampling.updated_at) }}
+            </div>
           </div>
         </div>
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
           <div class="flex gap-2">
             <Button variant="outline" @click="printReport">🖨️ Print Report</Button>
             <Button variant="secondary" @click="exportToExcel">📊 Export to Excel</Button>
+            <Dialog v-model:open="showDetectionDialog">
+              <DialogTrigger as-child>
+                <Button variant="default" @click="openDetectionCamera">🤖 AI Fish Detection</Button>
+              </DialogTrigger>
+              <DialogContent class="max-w-5xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>AI-Powered Fish Detection</DialogTitle>
+                </DialogHeader>
+                <FishDetectionCamera
+                  ref="cameraRef"
+                  :sampling-id="props.sampling?.id"
+                  :doc="report.doc"
+                  :auto-detect="true"
+                  @detection="handleDetection"
+                  @error="handleDetectionError"
+                />
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         <!-- Average Data Block -->
@@ -221,6 +323,28 @@ const exportToExcel = () => {
             <div>
               <div class="text-sm text-blue-700 dark:text-blue-300">Type</div>
               <div class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ tooltipData.type }}</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- AI Predictions Block -->
+        <div v-if="aiAverages" class="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold text-purple-900 dark:text-purple-100">🤖 AI-Predicted Averages</h3>
+            <span class="text-xs text-purple-700 dark:text-purple-300">Based on {{ aiAverages.count }} detection(s)</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <div class="text-sm text-purple-700 dark:text-purple-300">Avg Length</div>
+              <div class="text-lg font-bold text-purple-900 dark:text-purple-100">{{ aiAverages.length }} cm</div>
+            </div>
+            <div>
+              <div class="text-sm text-purple-700 dark:text-purple-300">Avg Width</div>
+              <div class="text-lg font-bold text-purple-900 dark:text-purple-100">{{ aiAverages.width }} cm</div>
+            </div>
+            <div>
+              <div class="text-sm text-purple-700 dark:text-purple-300">Avg Weight</div>
+              <div class="text-lg font-bold text-purple-900 dark:text-purple-100">{{ aiAverages.weight }} g</div>
             </div>
           </div>
         </div>

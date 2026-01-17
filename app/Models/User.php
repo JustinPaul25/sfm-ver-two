@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -44,5 +45,37 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Get the cages managed by this farmer.
+     */
+    public function cages()
+    {
+        return $this->hasMany(Cage::class, 'farmer_id');
+    }
+
+    /**
+     * Check if user is a farmer.
+     */
+    public function isFarmer(): bool
+    {
+        return $this->role === 'farmer';
+    }
+
+    /**
+     * Check if user is an investor.
+     */
+    public function isInvestor(): bool
+    {
+        return $this->role === 'investor';
+    }
+
+    /**
+     * Check if user is an admin.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
     }
 }

@@ -13,6 +13,7 @@ class Cage extends Model
         'type',
         'feed_types_id',
         'investor_id',
+        'farmer_id',
     ];
 
     public function feedType() {
@@ -21,6 +22,10 @@ class Cage extends Model
 
     public function investor() {
         return $this->belongsTo(Investor::class);
+    }
+
+    public function farmer() {
+        return $this->belongsTo(User::class, 'farmer_id');
     }
 
     public function feedConsumptions() {

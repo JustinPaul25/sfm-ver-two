@@ -4,7 +4,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useSamplingStore } from '@/Stores/SamplingStore';
 import { useInvestorStore } from '@/Stores/InvestorStore';
 import { useCageStore } from '@/Stores/CageStore';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
+import { type SharedData } from '@/types';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Label from '@/components/ui/label/Label.vue';
@@ -16,6 +17,10 @@ import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
 import Swal from 'sweetalert2';
 
+const page = usePage<SharedData>();
+const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
+const isInvestor = computed(() => userRole.value === 'investor');
+
 // TODO: Replace with actual investor list from API or store
 
 interface Sampling {
@@ -26,6 +31,8 @@ interface Sampling {
   cage_no: number;
   mortality?: number;
   samples_count?: number;
+  created_at?: string;
+  updated_at?: string;
   investor?: {
     id: number;
     name: string;
@@ -249,6 +256,30 @@ function printSamplingReport(samplingId: number) {
   window.open(route('samplings.report', { sampling: samplingId }), '_blank');
 }
 
+// Format timestamp for display
+function formatTimestamp(timestamp: string | null | undefined): string {
+  if (!timestamp) return '-';
+  
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '-';
+    
+    // Format as "Jan 15, 2024 at 2:30 PM"
+    const options: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    };
+    
+    return date.toLocaleString('en-US', options);
+  } catch (error) {
+    return '-';
+  }
+}
+
 onMounted(() => {
   store.fetchSamplings();
   investorStore.fetchInvestorsSelect();
@@ -267,7 +298,7 @@ onMounted(() => {
             {{ isLoading ? 'Searching...' : 'Search' }}
           </Button>
         </div>
-        <Button @click="openCreateDialog" variant="secondary">Create Sampling</Button>
+        <Button v-if="!isInvestor" @click="openCreateDialog" variant="secondary">Create Sampling</Button>
       </div>
       <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-white dark:bg-gray-900">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -278,15 +309,16 @@ onMounted(() => {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">DOC</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cage No</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Samples</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
               <th class="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="isLoading">
-              <td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading samplings...</td>
+              <td colspan="7" class="px-6 py-4 text-center text-gray-500">Loading samplings...</td>
             </tr>
             <tr v-else-if="!samplings || !Array.isArray(samplings) || samplings.length === 0">
-              <td colspan="6" class="px-6 py-4 text-center text-gray-500">No samplings found.</td>
+              <td colspan="7" class="px-6 py-4 text-center text-gray-500">No samplings found.</td>
             </tr>
             <tr v-else v-for="s in samplings" :key="s?.id">
               <td class="px-6 py-4 whitespace-nowrap">
@@ -299,6 +331,15 @@ onMounted(() => {
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                   {{ s?.samples_count || 0 }} samples
                 </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                <div class="flex flex-col">
+                  <span class="font-medium">Created:</span>
+                  <span>{{ formatTimestamp(s?.created_at) }}</span>
+                  <span v-if="s?.updated_at && s?.updated_at !== s?.created_at" class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Updated: {{ formatTimestamp(s?.updated_at) }}
+                  </span>
+                </div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex gap-1">
@@ -333,6 +374,7 @@ onMounted(() => {
                     📄
                   </Button>
                   <Button 
+                    v-if="!isInvestor"
                     variant="secondary" 
                     size="sm" 
                     @click="openEditDialog(s)" 
@@ -343,6 +385,7 @@ onMounted(() => {
                     ✏️
                   </Button>
                   <Button 
+                    v-if="!isInvestor"
                     variant="destructive" 
                     size="sm" 
                     @click="confirmDelete(s?.id)" 

@@ -16,7 +16,13 @@ class CageController extends Controller
 
     public function list(Request $request)
     {
-        $query = Cage::with('investor');
+        $user = $request->user();
+        $query = Cage::with(['investor', 'farmer']);
+
+        // Farmers can only see their own cages
+        if ($user && $user->isFarmer()) {
+            $query->where('farmer_id', $user->id);
+        }
 
         if ($request->has('search') && $request->get('search')) {
             $search = $request->get('search');
@@ -46,12 +52,18 @@ class CageController extends Controller
 
     public function select(Request $request)
     {
+        $user = $request->user();
         $investorId = $request->get('investor_id');
         
         $query = Cage::query()
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });
+        
+        // Farmers can only see their own cages
+        if ($user && $user->isFarmer()) {
+            $query->where('farmer_id', $user->id);
+        }
         
         if ($investorId) {
             $query->where('investor_id', $investorId);
@@ -64,13 +76,29 @@ class CageController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
+        
+        // Investors cannot create cages
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot create cages'
+            ], 403);
+        }
+
         $request->validate([
             'number_of_fingerlings' => 'required|integer',
             'feed_types_id' => 'required|exists:feed_types,id',
             'investor_id' => 'required|exists:investors,id',
         ]);
 
-        $cage = Cage::create($request->all());
+        $data = $request->all();
+        
+        // Automatically assign farmer_id if user is a farmer
+        if ($user && $user->isFarmer()) {
+            $data['farmer_id'] = $user->id;
+        }
+
+        $cage = Cage::create($data);
 
         return response()->json([
             'message' => 'Cage created successfully',
@@ -80,6 +108,22 @@ class CageController extends Controller
 
     public function update(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors cannot update cages
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot update cages'
+            ], 403);
+        }
+
+        // Farmers can only update their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only update your own cages'
+            ], 403);
+        }
+
         $request->validate([
             'number_of_fingerlings' => 'required|integer',
             'feed_types_id' => 'required|exists:feed_types,id',
@@ -94,8 +138,24 @@ class CageController extends Controller
         ]);
     }
 
-    public function destroy(Cage $cage)
+    public function destroy(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors cannot delete cages
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot delete cages'
+            ], 403);
+        }
+
+        // Farmers can only delete their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only delete your own cages'
+            ], 403);
+        }
+
         // Clean up related records to avoid foreign key constraint errors
         // Delete feed consumptions linked to this cage
         $cage->feedConsumptions()->delete();
