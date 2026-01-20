@@ -272,7 +272,12 @@ onMounted(() => {
           <Input v-model="search" placeholder="Search cages..." @keyup.enter="handleSearch" class="w-64" />
           <Button @click="handleSearch" variant="default">Search</Button>
         </div>
-        <Button v-if="!isInvestor" @click="openCreateDialog" variant="secondary">Create Cage</Button>
+        <div class="flex gap-2">
+          <Link :href="route('cages.verification')">
+            <Button variant="outline">Per Cage Verification</Button>
+          </Link>
+          <Button v-if="!isInvestor" @click="openCreateDialog" variant="secondary">Create Cage</Button>
+        </div>
       </div>
       <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-white dark:bg-gray-900">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">

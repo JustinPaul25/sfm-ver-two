@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\DocsController;
+use App\Http\Controllers\SystemSettingsController;
 use Illuminate\Support\Facades\Route;
 
 // API Routes for mobile/device integration
@@ -17,4 +18,7 @@ Route::post('sampling/calculate', [DocsController::class, 'calculateSamplings'])
 
 // Get sampling details endpoint
 Route::get('sampling/{id}', [DocsController::class, 'getSampling']);
+
+// Get forecasting algorithm endpoint
+Route::get('settings/forecasting-algorithm', [SystemSettingsController::class, 'getForecastingAlgorithm']);
 

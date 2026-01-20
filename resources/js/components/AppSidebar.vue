@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 // import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
-import { LayoutGrid, Users, File, List, BarChart3, Clock } from 'lucide-vue-next';
+import { LayoutGrid, Users, File, List, BarChart3, Clock, UserCog, Settings } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
@@ -35,6 +35,11 @@ const farmerNavItems: NavItem[] = [
         href: '/cages/feeding-schedules',
         icon: Clock,
     },
+    {
+        title: 'Feeding Reports',
+        href: '/reports/feeding',
+        icon: BarChart3,
+    },
 ];
 
 // Menu items for investors (view-only)
@@ -57,6 +62,16 @@ const adminNavItems: NavItem[] = [
         title: 'Dashboard',
         href: '/dashboard',
         icon: LayoutGrid,
+    },
+    {
+        title: 'User Management',
+        href: '/users',
+        icon: UserCog,
+    },
+    {
+        title: 'System Settings',
+        href: '/settings/system',
+        icon: Settings,
     },
     {
         title: 'Investors',
@@ -84,8 +99,13 @@ const adminNavItems: NavItem[] = [
         icon: Clock,
     },
     {
-        title: 'Reports',
+        title: 'Sampling Reports',
         href: '/reports/overall',
+        icon: BarChart3,
+    },
+    {
+        title: 'Feeding Reports',
+        href: '/reports/feeding',
         icon: BarChart3,
     },
 ];

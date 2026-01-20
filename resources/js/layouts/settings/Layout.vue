@@ -2,10 +2,15 @@
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { type NavItem } from '@/types';
+import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
-const sidebarNavItems: NavItem[] = [
+const page = usePage<SharedData>();
+
+const isAdmin = computed(() => page.props.auth?.user?.role === 'admin');
+
+const baseSidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: '/settings/profile',
@@ -20,7 +25,19 @@ const sidebarNavItems: NavItem[] = [
     },
 ];
 
-const page = usePage();
+const sidebarNavItems = computed(() => {
+    const items = [...baseSidebarNavItems];
+    
+    // Add System settings for admin users
+    if (isAdmin.value) {
+        items.push({
+            title: 'System',
+            href: '/settings/system',
+        });
+    }
+    
+    return items;
+});
 
 const currentPath = page.props.ziggy?.location ? new URL(page.props.ziggy.location).pathname : '';
 </script>

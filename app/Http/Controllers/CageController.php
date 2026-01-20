@@ -6,12 +6,18 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Cage;
 use App\Models\CageFeedConsumption;
+use App\Models\Sampling;
 
 class CageController extends Controller
 {
     public function index(Request $request)
     {
         return Inertia::render('Cages/Index');
+    }
+
+    public function verification(Request $request)
+    {
+        return Inertia::render('Cages/Verification');
     }
 
     public function list(Request $request)
@@ -273,5 +279,79 @@ class CageController extends Controller
                 'message' => 'Error deleting feed consumption: ' . $e->getMessage()
             ]);
         }
+    }
+
+    public function verificationData(Request $request)
+    {
+        $user = $request->user();
+        
+        // Build query with relationships
+        $query = Cage::with(['investor', 'feedType']);
+        
+        // Farmers can only see their own cages
+        if ($user && $user->isFarmer()) {
+            $query->where('farmer_id', $user->id);
+        }
+        
+        // Get all cages
+        $cages = $query->get();
+        
+        // Build verification data for each cage
+        $verificationData = $cages->map(function ($cage) {
+            // Get the latest sampling for this cage
+            $latestSampling = Sampling::with('samples')
+                ->where('cage_no', $cage->id)
+                ->orderBy('date_sampling', 'desc')
+                ->first();
+            
+            $avgWeight = null;
+            $avgLength = null;
+            $avgWidth = null;
+            $numberOfFish = $cage->number_of_fingerlings;
+            $mortality = 0;
+            $presentStocks = $numberOfFish;
+            $lastSamplingDate = null;
+            
+            if ($latestSampling) {
+                $samples = $latestSampling->samples;
+                
+                // Calculate averages from samples
+                if ($samples->count() > 0) {
+                    $totalWeight = $samples->sum('weight');
+                    $avgWeight = round($totalWeight / $samples->count(), 2);
+                    
+                    $samplesWithLength = $samples->whereNotNull('length');
+                    if ($samplesWithLength->count() > 0) {
+                        $avgLength = round($samplesWithLength->avg('length'), 1);
+                    }
+                    
+                    $samplesWithWidth = $samples->whereNotNull('width');
+                    if ($samplesWithWidth->count() > 0) {
+                        $avgWidth = round($samplesWithWidth->avg('width'), 1);
+                    }
+                }
+                
+                $mortality = $latestSampling->mortality ?? 0;
+                $presentStocks = $numberOfFish - $mortality;
+                $lastSamplingDate = $latestSampling->date_sampling;
+            }
+            
+            return [
+                'id' => $cage->id,
+                'number_of_fingerlings' => $numberOfFish,
+                'mortality' => $mortality,
+                'present_stocks' => $presentStocks,
+                'investor' => $cage->investor ? $cage->investor->name : 'N/A',
+                'feed_type' => $cage->feedType ? $cage->feedType->feed_type : 'N/A',
+                'avg_weight' => $avgWeight,
+                'avg_length' => $avgLength,
+                'avg_width' => $avgWidth,
+                'last_sampling_date' => $lastSamplingDate,
+            ];
+        })->sortBy('id')->values();
+        
+        return response()->json([
+            'verification_data' => $verificationData
+        ]);
     }
 } 

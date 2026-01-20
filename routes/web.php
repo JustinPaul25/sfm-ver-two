@@ -6,7 +6,10 @@ use App\Http\Controllers\FeedTypeController;
 use App\Http\Controllers\CageController;
 use App\Http\Controllers\CageFeedingScheduleController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\FeedingReportController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\SystemSettingsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -52,6 +55,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('cages', [CageController::class, 'index'])->name('cages.index');
     Route::get('cages/list', [CageController::class, 'list'])->name('cages.list');
     Route::get('cages/select', [CageController::class, 'select'])->name('cages.select');
+    Route::get('cages/verification', [CageController::class, 'verification'])->name('cages.verification');
+    Route::get('cages/verification/data', [CageController::class, 'verificationData'])->name('cages.verification.data');
     Route::post('cages', [CageController::class, 'store'])->name('cages.store');
     Route::put('cages/{cage}', [CageController::class, 'update'])->name('cages.update');
     Route::delete('cages/{cage}', [CageController::class, 'destroy'])->name('cages.destroy');
@@ -77,6 +82,28 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');
     Route::get('reports/overall', [ReportsController::class, 'overall'])->name('reports.overall');
     Route::get('reports/export-excel', [ReportsController::class, 'exportExcel'])->name('reports.export-excel');
+
+    // FeedingReportController
+    Route::get('reports/feeding', [FeedingReportController::class, 'index'])->name('reports.feeding');
+    Route::get('reports/feeding/weekly', [FeedingReportController::class, 'weeklyReport'])->name('reports.feeding.weekly');
+    Route::get('reports/feeding/export-weekly', [FeedingReportController::class, 'exportWeeklyReport'])->name('reports.feeding.export-weekly');
+});
+
+// Admin-only routes
+Route::middleware(['auth', 'admin'])->group(function () {
+    // UserController (admin only)
+    Route::get('users', [UserController::class, 'index'])->name('users.index');
+    Route::get('users/list', [UserController::class, 'list'])->name('users.list');
+    Route::get('users/statistics', [UserController::class, 'statistics'])->name('users.statistics');
+    Route::post('users', [UserController::class, 'store'])->name('users.store');
+    Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::put('users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');
+    Route::post('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
+    Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+    // SystemSettingsController (admin only)
+    Route::get('settings/system', [SystemSettingsController::class, 'index'])->name('settings.system');
+    Route::put('settings/system/forecasting-algorithm', [SystemSettingsController::class, 'updateForecastingAlgorithm'])->name('settings.system.forecasting-algorithm');
 });
 
 

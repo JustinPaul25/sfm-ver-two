@@ -22,125 +22,132 @@ class CageFeedConsumptionSeeder extends Seeder
             return;
         }
 
-        // Method 1: Basic usage - create 50 random feed consumptions
-        for ($i = 0; $i < 50; $i++) {
-            CageFeedConsumption::firstOrCreate([
-                'cage_id' => $cages->random()->id,
-                'day_number' => rand(200, 500), // Use higher day numbers to avoid conflicts
-            ], [
-                'feed_amount' => round(rand(50, 1000) / 100, 2), // Random amount between 0.5 and 10.0
-                'consumption_date' => now()->subDays(rand(1, 365)),
-                'notes' => rand(0, 1) ? 'Regular feeding' : null,
-            ]);
-        }
-
-        // Method 2: Create feed consumptions for specific cages
+        $this->command->info('Creating comprehensive historical feed consumption data...');
+        
+        $totalConsumptions = 0;
+        
+        // Create realistic feed consumption data for all cages
+        // This matches the verification feature's timeframe
         foreach ($cages as $cage) {
-            // Create 30 days of feed consumption for each cage
-            for ($day = 1; $day <= 30; $day++) {
+            // Create 120 days of feed consumption with realistic growth patterns
+            // This aligns with the 120 days of sampling data
+            for ($day = 1; $day <= 120; $day++) {
+                // Calculate realistic feed amount based on:
+                // 1. Number of fingerlings in cage
+                // 2. Age of fish (older = more food)
+                // 3. Feed conversion ratio (FCR) typical values
+                
+                // Base feeding rate: ~3-5% of biomass per day for tilapia
+                // As fish grow, feeding rate decreases slightly as % but increases in absolute amount
+                
+                // Estimate average fish weight based on age (day number)
+                // Start at 30g, grow by realistic amount per day
+                if ($day <= 30) {
+                    $avgFishWeight = 30 + ($day * 2); // Fast initial growth
+                } elseif ($day <= 60) {
+                    $avgFishWeight = 90 + (($day - 30) * 1.5);
+                } elseif ($day <= 90) {
+                    $avgFishWeight = 135 + (($day - 60) * 1.2);
+                } else {
+                    $avgFishWeight = 171 + (($day - 90) * 0.8);
+                }
+                
+                // Calculate total biomass (kg)
+                $totalBiomass = ($cage->number_of_fingerlings * $avgFishWeight) / 1000;
+                
+                // Feeding rate decreases as fish age (% of biomass)
+                if ($day <= 30) {
+                    $feedingRate = 0.05; // 5% for young fish
+                } elseif ($day <= 60) {
+                    $feedingRate = 0.04; // 4% for growing fish
+                } elseif ($day <= 90) {
+                    $feedingRate = 0.035; // 3.5% for mature fish
+                } else {
+                    $feedingRate = 0.03; // 3% for older fish
+                }
+                
+                // Calculate base feed amount
+                $baseFeedAmount = $totalBiomass * $feedingRate;
+                
+                // Add realistic daily variation (±10%)
+                $variation = rand(-10, 10) / 100;
+                $feedAmount = $baseFeedAmount * (1 + $variation);
+                
+                // Ensure minimum feed amount
+                $feedAmount = max(0.5, round($feedAmount, 2));
+                
+                // Calculate consumption date
+                $consumptionDate = now()->subDays(120 - $day);
+                
+                // Add notes for important milestones
+                $notes = null;
+                if ($day % 30 === 0) {
+                    $notes = "Monthly feeding review - Day {$day}";
+                } elseif ($day % 7 === 0) {
+                    $notes = "Weekly check";
+                }
+                
                 CageFeedConsumption::firstOrCreate([
                     'cage_id' => $cage->id,
                     'day_number' => $day,
                 ], [
-                    'feed_amount' => round(rand(50, 1000) / 100, 2), // Random amount between 0.5 and 10.0
-                    'consumption_date' => now()->subDays(30 - $day),
+                    'feed_amount' => $feedAmount,
+                    'consumption_date' => $consumptionDate,
+                    'notes' => $notes,
                 ]);
+                
+                $totalConsumptions++;
             }
-        }
-
-        // Method 3: Using custom states
-        for ($i = 0; $i < 20; $i++) {
-            CageFeedConsumption::firstOrCreate([
-                'cage_id' => $cages->random()->id,
-                'day_number' => rand(600, 800), // Use higher day numbers
-            ], [
-                'feed_amount' => 3.5, // Fixed amount
-                'consumption_date' => now()->subDays(rand(1, 365)),
-                'notes' => 'Regular feeding schedule',
-            ]);
-        }
-
-        // Method 4: Create feed consumptions with specific date ranges
-        for ($i = 0; $i < 15; $i++) {
-            CageFeedConsumption::firstOrCreate([
-                'cage_id' => $cages->random()->id,
-                'day_number' => rand(900, 1000), // Use higher day numbers
-            ], [
-                'feed_amount' => round(rand(50, 1000) / 100, 2), // Random amount between 0.5 and 10.0
-                'consumption_date' => now()->subDays(rand(1, 60)),
-            ]);
-        }
-
-        // Method 5: Using relationships and callbacks
-        // Create 2 additional cages and their feed consumptions
-        $additionalCages = [];
-        for ($i = 0; $i < 2; $i++) {
-            $cage = Cage::create([
-                'number_of_fingerlings' => rand(500, 3000),
-                'feed_types_id' => \App\Models\FeedType::inRandomOrder()->first()->id,
-                'investor_id' => \App\Models\Investor::inRandomOrder()->first()->id,
-            ]);
-            $additionalCages[] = $cage;
         }
         
-        foreach ($additionalCages as $cage) {
-            // Create feed consumptions for each new cage
-            for ($day = 1; $day <= 25; $day++) {
-                CageFeedConsumption::firstOrCreate([
-                    'cage_id' => $cage->id,
-                    'day_number' => $day,
-                ], [
-                    'feed_amount' => round(rand(50, 1000) / 100, 2), // Random amount between 0.5 and 10.0
-                    'consumption_date' => now()->subDays(25 - $day),
-                ]);
-            }
-        }
-
-        // Method 6: Create feed consumptions with realistic patterns
-        $cages->each(function ($cage) {
-            // Create 90 days of feed consumption with realistic patterns
-            for ($day = 1; $day <= 90; $day++) {
-                // Feed amount increases over time (fish grow)
-                $baseAmount = 2.0 + ($day * 0.02); // Start at 2kg, increase by 0.02kg per day
-                $variation = rand(-10, 10) / 100; // Add some random variation
-                $feedAmount = max(1.0, $baseAmount + $variation); // Minimum 1kg
-
-                CageFeedConsumption::firstOrCreate([
-                    'cage_id' => $cage->id,
-                    'day_number' => $day,
-                ], [
-                    'feed_amount' => round($feedAmount, 2),
-                    'consumption_date' => now()->subDays(90 - $day),
-                    'notes' => $day % 7 === 0 ? 'Weekly feeding review' : null,
-                ]);
-            }
-        });
-
-        // Method 7: Create feed consumptions with different feeding strategies
-        $feedingStrategies = [
-            'conservative' => 0.015, // 0.015kg increase per day
-            'moderate' => 0.025,     // 0.025kg increase per day
-            'aggressive' => 0.035,   // 0.035kg increase per day
-        ];
-
-        $cages->take(5)->each(function ($cage, $index) use ($feedingStrategies) {
-            $strategies = array_values($feedingStrategies);
-            $strategy = $strategies[$index % count($strategies)];
+        // Create some edge case feed consumptions for specific testing
+        $this->command->info('Creating edge case feed consumption data...');
+        
+        // Test cases: very low and very high feed amounts
+        if ($cages->count() >= 3) {
+            // Edge case 1: Very low feeding (potential issue)
+            $testCage1 = $cages->random();
+            CageFeedConsumption::firstOrCreate([
+                'cage_id' => $testCage1->id,
+                'day_number' => 150,
+            ], [
+                'feed_amount' => 0.5,
+                'consumption_date' => now()->subDays(5),
+                'notes' => 'Low feeding test case',
+            ]);
+            $totalConsumptions++;
             
-            for ($day = 1; $day <= 60; $day++) {
-                $baseAmount = 1.5 + ($day * $strategy);
-                $variation = rand(-15, 15) / 100;
-                $feedAmount = max(0.5, $baseAmount + $variation);
-
-                CageFeedConsumption::firstOrCreate([
-                    'cage_id' => $cage->id,
-                    'day_number' => $day + 100, // Different day range
-                ], [
-                    'feed_amount' => round($feedAmount, 2),
-                    'consumption_date' => now()->subDays(60 - $day),
-                    'notes' => "Feeding strategy: " . array_keys($feedingStrategies)[$index % count($feedingStrategies)],
-                ]);
-            }
-        });
+            // Edge case 2: Very high feeding (aggressive strategy)
+            $testCage2 = $cages->random();
+            CageFeedConsumption::firstOrCreate([
+                'cage_id' => $testCage2->id,
+                'day_number' => 151,
+            ], [
+                'feed_amount' => 50.0,
+                'consumption_date' => now()->subDays(3),
+                'notes' => 'High feeding test case',
+            ]);
+            $totalConsumptions++;
+            
+            // Edge case 3: Skipped feeding day (zero or missing)
+            $testCage3 = $cages->random();
+            CageFeedConsumption::firstOrCreate([
+                'cage_id' => $testCage3->id,
+                'day_number' => 152,
+            ], [
+                'feed_amount' => 0.0,
+                'consumption_date' => now()->subDays(2),
+                'notes' => 'Skipped feeding - maintenance day',
+            ]);
+            $totalConsumptions++;
+        }
+        
+        $this->command->info('Feed consumptions seeded successfully!');
+        $this->command->info("Created {$totalConsumptions} total feed consumption records:");
+        $this->command->info("  - 120 days of historical data per cage");
+        $this->command->info("  - Realistic biomass-based feeding calculations");
+        $this->command->info("  - Age-appropriate feeding rates (3-5% of biomass)");
+        $this->command->info("  - Daily variation to simulate real conditions");
+        $this->command->info("  - Edge cases for testing");
     }
 }
