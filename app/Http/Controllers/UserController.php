@@ -94,10 +94,11 @@ class UserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:users',
             'role' => 'required|in:farmer,investor,admin',
             // Required for investor role
-            'address' => 'required_if:role,investor|string|max:255',
+            'address' => 'nullable|required_if:role,investor|string|max:255',
             // Required for farmer and investor roles
             'phone' => [
-                'required_if:role,farmer,investor',
+                'nullable',
+                'required_if:role,farmer|required_if:role,investor',
                 'string',
                 'regex:/^(\+63|0)?9\d{9}$/',
             ],

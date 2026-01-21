@@ -213,6 +213,23 @@ function openCreateDialog() {
   };
   validationErrors.value = {};
   showCreateDialog.value = true;
+  console.log('Create dialog opened. Available investors:', investors.value);
+}
+
+function handleRoleChange() {
+  // Clear validation errors when role changes
+  validationErrors.value = {};
+  
+  // Clear role-specific fields when switching roles
+  if (newUser.value.role === 'farmer') {
+    newUser.value.address = '';
+  } else if (newUser.value.role === 'investor') {
+    newUser.value.investor_id = null;
+  } else if (newUser.value.role === 'admin') {
+    newUser.value.address = '';
+    newUser.value.phone = '';
+    newUser.value.investor_id = null;
+  }
 }
 
 async function createUser() {
@@ -220,15 +237,41 @@ async function createUser() {
   validationErrors.value = {};
   
   try {
-    await axios.post('/users', newUser.value);
+    // Build the request payload based on the role
+    const payload: any = {
+      name: newUser.value.name,
+      email: newUser.value.email,
+      role: newUser.value.role,
+    };
+    
+    // Add role-specific fields
+    if (newUser.value.role === 'farmer') {
+      payload.phone = newUser.value.phone;
+      payload.investor_id = newUser.value.investor_id;
+    } else if (newUser.value.role === 'investor') {
+      payload.phone = newUser.value.phone;
+      payload.address = newUser.value.address;
+    }
+    // Admin doesn't need any additional fields
+    
+    console.log('Submitting user data:', payload);
+    await axios.post('/users', payload);
     await fetchUsers();
     await fetchStatistics();
     showCreateDialog.value = false;
     Swal.fire({ icon: 'success', title: 'User created successfully!' });
   } catch (error: any) {
+    console.error('Error creating user:', error);
+    console.error('Error response:', error?.response);
+    console.error('Error data:', error?.response?.data);
+    
     // Handle validation errors
     if (error?.response?.status === 422 && error?.response?.data?.errors) {
       validationErrors.value = error.response.data.errors;
+      console.error('Validation errors:', validationErrors.value);
+      
+      // Validation errors will be displayed on the input fields automatically
+      // No popup for validation errors - just keep the dialog open
     } else {
       // For non-validation errors, show SweetAlert
       const message = error?.response?.data?.message || 'Failed to create user.';
@@ -571,6 +614,7 @@ onMounted(() => {
             <select 
               id="role" 
               v-model="newUser.role" 
+              @change="handleRoleChange"
               class="input w-full rounded border p-2" 
               required 
               :disabled="creatingUser"
@@ -652,13 +696,16 @@ onMounted(() => {
                 :disabled="creatingUser"
                 :class="{ 'border-red-500': validationErrors.investor_id }"
               >
-                <option :value="null" disabled>Select an investor</option>
+                <option :value="null" disabled selected>Select an investor</option>
                 <option v-for="investor in investors" :key="investor.id" :value="investor.id">
                   {{ investor.name }}
                 </option>
               </select>
               <p v-if="validationErrors.investor_id" class="text-xs text-red-500 mt-1">
                 {{ validationErrors.investor_id[0] }}
+              </p>
+              <p v-else class="text-xs text-muted-foreground mt-1">
+                Select the investor this farmer will be associated with
               </p>
             </div>
           </template>
