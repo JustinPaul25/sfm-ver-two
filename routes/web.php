@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\InvestorController;
+use App\Http\Controllers\InvestorDashboardController;
 use App\Http\Controllers\SamplingController;
 use App\Http\Controllers\FeedTypeController;
 use App\Http\Controllers\CageController;
@@ -87,6 +88,11 @@ Route::middleware(['auth'])->group(function () {
     Route::get('reports/feeding', [FeedingReportController::class, 'index'])->name('reports.feeding');
     Route::get('reports/feeding/weekly', [FeedingReportController::class, 'weeklyReport'])->name('reports.feeding.weekly');
     Route::get('reports/feeding/export-weekly', [FeedingReportController::class, 'exportWeeklyReport'])->name('reports.feeding.export-weekly');
+});
+
+// Investor-only routes
+Route::middleware(['auth', 'investor'])->group(function () {
+    Route::get('investor/dashboard', [InvestorDashboardController::class, 'index'])->name('investor.dashboard');
 });
 
 // Admin-only routes

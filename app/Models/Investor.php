@@ -31,4 +31,9 @@ class Investor extends Model
     {
         return $this->hasMany(Sample::class);
     }
+
+    public function farmers()
+    {
+        return $this->hasMany(User::class)->where('role', 'farmer');
+    }
 }

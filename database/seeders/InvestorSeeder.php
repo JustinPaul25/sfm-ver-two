@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Investor;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 class InvestorSeeder extends Seeder
 {
@@ -95,7 +97,202 @@ class InvestorSeeder extends Seeder
             $archived->delete();
         }
 
+        // Create investor user accounts so they can log in
+        $investorUserData = [
+            ['investor_name' => 'John Smith', 'email' => 'john.smith@investor.com', 'password' => 'password'],
+            ['investor_name' => 'Maria Garcia', 'email' => 'maria.garcia@investor.com', 'password' => 'password'],
+            ['investor_name' => 'Robert Johnson', 'email' => 'robert.johnson@investor.com', 'password' => 'password'],
+            ['investor_name' => 'Ana Santos', 'email' => 'ana.santos@investor.com', 'password' => 'password'],
+            ['investor_name' => 'Carlos Rodriguez', 'email' => 'carlos.rodriguez@investor.com', 'password' => 'password'],
+        ];
+
+        $createdInvestorUsers = 0;
+        foreach ($investorUserData as $investorUser) {
+            $investor = Investor::where('name', $investorUser['investor_name'])->first();
+            
+            if ($investor) {
+                User::firstOrCreate([
+                    'email' => $investorUser['email'],
+                ], [
+                    'name' => $investorUser['investor_name'],
+                    'email_verified_at' => now(),
+                    'password' => Hash::make($investorUser['password']),
+                    'role' => 'investor',
+                    'is_active' => true,
+                    'investor_id' => $investor->id,
+                ]);
+                $createdInvestorUsers++;
+            }
+        }
+
+        // Create farmer users and link them to investors
+        $farmerData = [
+            // Farmers for John Smith
+            [
+                'name' => 'Pedro Santos',
+                'email' => 'pedro.santos@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'John Smith',
+            ],
+            [
+                'name' => 'Juan Dela Cruz',
+                'email' => 'juan.delacruz@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'John Smith',
+            ],
+            // Farmers for Maria Garcia
+            [
+                'name' => 'Carmen Rivera',
+                'email' => 'carmen.rivera@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Maria Garcia',
+            ],
+            [
+                'name' => 'Sofia Mercado',
+                'email' => 'sofia.mercado@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Maria Garcia',
+            ],
+            // Farmers for Robert Johnson
+            [
+                'name' => 'Ricardo Gomez',
+                'email' => 'ricardo.gomez@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Robert Johnson',
+            ],
+            [
+                'name' => 'Fernando Lopez',
+                'email' => 'fernando.lopez@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Robert Johnson',
+            ],
+            [
+                'name' => 'Gabriel Cruz',
+                'email' => 'gabriel.cruz@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Robert Johnson',
+            ],
+            // Farmers for Ana Santos
+            [
+                'name' => 'Rosa Diaz',
+                'email' => 'rosa.diaz@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Ana Santos',
+            ],
+            [
+                'name' => 'Lucia Martinez',
+                'email' => 'lucia.martinez@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Ana Santos',
+            ],
+            // Farmers for Carlos Rodriguez
+            [
+                'name' => 'Miguel Ramos',
+                'email' => 'miguel.ramos@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Carlos Rodriguez',
+            ],
+            [
+                'name' => 'Andres Fernandez',
+                'email' => 'andres.fernandez@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Carlos Rodriguez',
+            ],
+            // Farmers for Luz Cruz
+            [
+                'name' => 'Elena Vargas',
+                'email' => 'elena.vargas@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Luz Cruz',
+            ],
+            // Farmers for Miguel Torres
+            [
+                'name' => 'Diego Morales',
+                'email' => 'diego.morales@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Miguel Torres',
+            ],
+            [
+                'name' => 'Antonio Herrera',
+                'email' => 'antonio.herrera@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Miguel Torres',
+            ],
+            // Farmers for Isabel Reyes
+            [
+                'name' => 'Isabella Castro',
+                'email' => 'isabella.castro@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Isabel Reyes',
+            ],
+            [
+                'name' => 'Valentina Ortiz',
+                'email' => 'valentina.ortiz@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Isabel Reyes',
+            ],
+            // Farmers for additional investors
+            [
+                'name' => 'Eduardo Silva',
+                'email' => 'eduardo.silva@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Pedro Martinez',
+            ],
+            [
+                'name' => 'Catalina Mendoza',
+                'email' => 'catalina.mendoza@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Carmen Lopez',
+            ],
+            [
+                'name' => 'Francisco Ruiz',
+                'email' => 'francisco.ruiz@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Jose Santos',
+            ],
+            [
+                'name' => 'Mariana Flores',
+                'email' => 'mariana.flores@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Rosa Mendoza',
+            ],
+            [
+                'name' => 'Alberto Jimenez',
+                'email' => 'alberto.jimenez@sfm.com',
+                'password' => 'password',
+                'investor_name' => 'Antonio Flores',
+            ],
+        ];
+
+        $createdFarmers = 0;
+        foreach ($farmerData as $farmer) {
+            $investor = Investor::where('name', $farmer['investor_name'])->first();
+            
+            if ($investor) {
+                User::firstOrCreate([
+                    'email' => $farmer['email'],
+                ], [
+                    'name' => $farmer['name'],
+                    'email_verified_at' => now(),
+                    'password' => Hash::make($farmer['password']),
+                    'role' => 'farmer',
+                    'is_active' => true,
+                    'investor_id' => $investor->id,
+                ]);
+                $createdFarmers++;
+            }
+        }
+
         $this->command->info('Investors seeded successfully!');
-        $this->command->info('Created ' . count($investors) . ' specific investors and 12 random investors, plus 1 archived investor.');
+        $this->command->info('Created ' . count($investors) . ' specific investors and ' . count($additionalInvestors) . ' additional investors, plus 1 archived investor.');
+        $this->command->info('Created ' . $createdInvestorUsers . ' investor user accounts for login.');
+        $this->command->info('Created ' . $createdFarmers . ' farmers linked to investors.');
+        $this->command->info('');
+        $this->command->info('=== Investor Login Credentials ===');
+        $this->command->info('john.smith@investor.com / password');
+        $this->command->info('maria.garcia@investor.com / password');
+        $this->command->info('robert.johnson@investor.com / password');
+        $this->command->info('ana.santos@investor.com / password');
+        $this->command->info('carlos.rodriguez@investor.com / password');
     }
 }

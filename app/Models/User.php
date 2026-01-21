@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'role',
         'is_active',
+        'investor_id',
     ];
 
     /**
@@ -55,6 +56,14 @@ class User extends Authenticatable
     public function cages()
     {
         return $this->hasMany(Cage::class, 'farmer_id');
+    }
+
+    /**
+     * Get the investor that this farmer belongs to.
+     */
+    public function investor()
+    {
+        return $this->belongsTo(Investor::class);
     }
 
     /**
