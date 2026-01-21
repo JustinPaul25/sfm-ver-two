@@ -25,6 +25,11 @@ class CageController extends Controller
         $user = $request->user();
         $query = Cage::with(['investor', 'farmer']);
 
+        // Investors can only see their own cages
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
+
         // Farmers can only see their own cages
         if ($user && $user->isFarmer()) {
             $query->where('farmer_id', $user->id);
@@ -65,6 +70,11 @@ class CageController extends Controller
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });
+        
+        // Investors can only see their own cages
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
         
         // Farmers can only see their own cages
         if ($user && $user->isFarmer()) {
@@ -216,8 +226,24 @@ class CageController extends Controller
         ]);
     }
 
-    public function show(Cage $cage)
+    public function show(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors can only view their own cages
+        if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
+        // Farmers can only view their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
         $cage->load(['feedType', 'investor', 'feedConsumptions']);
         
         return Inertia::render('Cages/View', [
@@ -226,8 +252,24 @@ class CageController extends Controller
         ]);
     }
 
-    public function getFeedConsumptions(Cage $cage)
+    public function getFeedConsumptions(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors can only view their own cages
+        if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
+        // Farmers can only view their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
         try {
             $consumptions = $cage->feedConsumptions()
                 ->orderBy('day_number')
@@ -319,6 +361,11 @@ class CageController extends Controller
         
         // Build query with relationships
         $query = Cage::with(['investor', 'feedType']);
+        
+        // Investors can only see their own cages
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
         
         // Farmers can only see their own cages
         if ($user && $user->isFarmer()) {

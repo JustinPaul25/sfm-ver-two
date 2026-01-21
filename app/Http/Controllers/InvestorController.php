@@ -19,14 +19,28 @@ class InvestorController extends Controller
 
     public function select(Request $request)
     {
-        $investors = Investor::whereNull('deleted_at')->get();
+        $user = $request->user();
+        $query = Investor::whereNull('deleted_at');
+        
+        // Investors can only see their own investor record
+        if ($user && $user->isInvestor()) {
+            $query->where('id', $user->investor_id);
+        }
+        
+        $investors = $query->get();
 
         return response()->json($investors);
     }
 
     public function list(Request $request)
     {
+        $user = $request->user();
         $query = Investor::query();
+        
+        // Investors can only see their own investor record
+        if ($user && $user->isInvestor()) {
+            $query->where('id', $user->investor_id);
+        }
 
         if ($request->has('search')) {
             $search = $request->get('search');
@@ -80,6 +94,15 @@ class InvestorController extends Controller
 
     public function report(Request $request, Investor $investor)
     {
+        $user = $request->user();
+        
+        // Investors can only view their own report
+        if ($user && $user->isInvestor() && $investor->id !== $user->investor_id) {
+            return response()->json([
+                'message' => 'You can only view your own investor report'
+            ], 403);
+        }
+        
         // Get all cages for this investor
         $cages = $investor->cages()->with(['feedType', 'samplings.samples'])->get();
         

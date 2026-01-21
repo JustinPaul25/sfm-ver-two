@@ -28,9 +28,21 @@ class CageFeedingScheduleController extends Controller
         }
         
         // List all cages with their feeding schedules
-        $cages = Cage::with(['feedingSchedule', 'investor', 'feedType'])
-            ->orderBy('created_at', 'desc')
-            ->get()
+        $user = $request->user();
+        $cagesQuery = Cage::with(['feedingSchedule', 'investor', 'feedType'])
+            ->orderBy('created_at', 'desc');
+        
+        // Investors can only see their own cages
+        if ($user && $user->isInvestor()) {
+            $cagesQuery->where('investor_id', $user->investor_id);
+        }
+        
+        // Farmers can only see their own cages
+        if ($user && $user->isFarmer()) {
+            $cagesQuery->where('farmer_id', $user->id);
+        }
+        
+        $cages = $cagesQuery->get()
             ->map(function ($cage) {
                 return [
                     'id' => $cage->id,
@@ -155,11 +167,27 @@ class CageFeedingScheduleController extends Controller
 
     public function getTodaySchedule(Request $request)
     {
+        $user = $request->user();
         $today = now()->format('Y-m-d');
         
-        $schedules = CageFeedingSchedule::with(['cage.investor', 'cage.feedType'])
-            ->where('is_active', true)
-            ->get()
+        $query = CageFeedingSchedule::with(['cage.investor', 'cage.feedType'])
+            ->where('is_active', true);
+        
+        // Investors can only see their own cages' schedules
+        if ($user && $user->isInvestor()) {
+            $query->whereHas('cage', function($q) use ($user) {
+                $q->where('investor_id', $user->investor_id);
+            });
+        }
+        
+        // Farmers can only see their own cages' schedules
+        if ($user && $user->isFarmer()) {
+            $query->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
+        
+        $schedules = $query->get()
             ->filter(function ($schedule) {
                 return $schedule->isFeedingTime();
             })
@@ -184,8 +212,24 @@ class CageFeedingScheduleController extends Controller
         ]);
     }
 
-    public function getCageScheduleDetails(Cage $cage)
+    public function getCageScheduleDetails(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors can only view their own cages
+        if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
+        // Farmers can only view their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only view your own cages'
+            ], 403);
+        }
+        
         $schedule = $cage->feedingSchedule;
         
         if (!$schedule) {

@@ -45,14 +45,29 @@ const farmerNavItems: NavItem[] = [
 // Menu items for investors (view-only)
 const investorNavItems: NavItem[] = [
     {
+        title: 'My Dashboard',
+        href: '/investor/dashboard',
+        icon: LayoutGrid,
+    },
+    {
+        title: 'My Cages',
+        href: '/cages',
+        icon: List,
+    },
+    {
         title: 'Samplings',
         href: '/samplings',
         icon: File,
     },
     {
-        title: 'Cages',
-        href: '/cages',
-        icon: List,
+        title: 'Cage Verification',
+        href: '/cages/verification',
+        icon: BarChart3,
+    },
+    {
+        title: 'Reports',
+        href: '/reports/overall',
+        icon: BarChart3,
     },
 ];
 

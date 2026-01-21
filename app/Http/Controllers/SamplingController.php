@@ -27,6 +27,11 @@ class SamplingController extends Controller
                 $q->whereNull('deleted_at');
             });
 
+        // Investors can only see their own samplings
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
+
         // Farmers can only see samplings for their own cages
         if ($user && $user->isFarmer()) {
             $query->whereHas('cage', function($q) use ($user) {
@@ -220,15 +225,29 @@ class SamplingController extends Controller
 
     public function report(Request $request)
     {
+        $user = $request->user();
         $samplingId = $request->get('sampling');
         
         if ($samplingId) {
             // Get specific sampling data with cage information
-            $sampling = Sampling::with(['investor', 'samples', 'feedType'])
+            $samplingQuery = Sampling::with(['investor', 'samples', 'feedType'])
                 ->whereHas('investor', function($q) {
                     $q->whereNull('deleted_at');
-                })
-                ->find($samplingId);
+                });
+            
+            // Investors can only view their own samplings
+            if ($user && $user->isInvestor()) {
+                $samplingQuery->where('investor_id', $user->investor_id);
+            }
+            
+            // Farmers can only view samplings for their own cages
+            if ($user && $user->isFarmer()) {
+                $samplingQuery->whereHas('cage', function($q) use ($user) {
+                    $q->where('farmer_id', $user->id);
+                });
+            }
+            
+            $sampling = $samplingQuery->find($samplingId);
             
             if ($sampling) {
                 // Get cage information for accurate biomass calculation
@@ -463,13 +482,29 @@ class SamplingController extends Controller
 
     public function exportReport(Request $request, $samplingId = null)
     {
+        $user = $request->user();
+        
         // If no sampling ID provided, use mock data for now
         if (!$samplingId) {
             return $this->exportMockReport();
         }
 
-        // Get real sampling data
-        $sampling = Sampling::with(['investor', 'samples'])->findOrFail($samplingId);
+        // Get real sampling data with access control
+        $samplingQuery = Sampling::with(['investor', 'samples']);
+        
+        // Investors can only view their own samplings
+        if ($user && $user->isInvestor()) {
+            $samplingQuery->where('investor_id', $user->investor_id);
+        }
+        
+        // Farmers can only view samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $samplingQuery->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
+        
+        $sampling = $samplingQuery->findOrFail($samplingId);
         
         return $this->exportRealReport($sampling);
     }

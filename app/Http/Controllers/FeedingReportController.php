@@ -47,8 +47,20 @@ class FeedingReportController extends Controller
             ? Carbon::parse($request->end_date)->endOfDay()
             : Carbon::now()->endOfWeek();
 
+        $user = $request->user();
+        
         // Build query for cages
         $cagesQuery = Cage::with(['investor', 'feedType', 'feedingSchedule', 'feedConsumptions']);
+
+        // Investors can only see their own cages
+        if ($user && $user->isInvestor()) {
+            $cagesQuery->where('investor_id', $user->investor_id);
+        }
+
+        // Farmers can only see their own cages
+        if ($user && $user->isFarmer()) {
+            $cagesQuery->where('farmer_id', $user->id);
+        }
 
         if ($request->cage_id) {
             $cagesQuery->where('id', $request->cage_id);
@@ -94,9 +106,21 @@ class FeedingReportController extends Controller
             );
         }
 
-        // Get investors and cages for filters
-        $investors = Investor::orderBy('name')->get(['id', 'name']);
-        $allCages = Cage::with('investor')->orderBy('id')->get()->map(function($cage) {
+        // Get investors and cages for filters (filtered by role)
+        $investorsQuery = Investor::orderBy('name');
+        if ($user && $user->isInvestor()) {
+            $investorsQuery->where('id', $user->investor_id);
+        }
+        $investors = $investorsQuery->get(['id', 'name']);
+        
+        $allCagesQuery = Cage::with('investor')->orderBy('id');
+        if ($user && $user->isInvestor()) {
+            $allCagesQuery->where('investor_id', $user->investor_id);
+        }
+        if ($user && $user->isFarmer()) {
+            $allCagesQuery->where('farmer_id', $user->id);
+        }
+        $allCages = $allCagesQuery->get()->map(function($cage) {
             return [
                 'id' => $cage->id,
                 'label' => "Cage {$cage->id}" . ($cage->investor ? " - {$cage->investor->name}" : ''),

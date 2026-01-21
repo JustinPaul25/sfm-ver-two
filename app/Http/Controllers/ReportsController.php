@@ -24,10 +24,24 @@ class ReportsController extends Controller
 
     public function overall(Request $request)
     {
+        $user = $request->user();
+        
         $query = Sampling::with(['investor', 'samples'])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });
+
+        // Investors can only see their own samplings
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
+
+        // Farmers can only see samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $query->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
 
         // Apply filters
         if ($request->filled('investor_id')) {
@@ -51,8 +65,12 @@ class ReportsController extends Controller
         // Calculate summary statistics
         $summary = $this->calculateSummary($samplings);
 
-        // Get investors for filter dropdown
-        $investors = Investor::orderBy('name')->get();
+        // Get investors for filter dropdown (filtered by role)
+        $investorsQuery = Investor::orderBy('name');
+        if ($user && $user->isInvestor()) {
+            $investorsQuery->where('id', $user->investor_id);
+        }
+        $investors = $investorsQuery->get();
 
         return Inertia::render('Reports/Overall', [
             'samplings' => $samplings,
@@ -64,10 +82,24 @@ class ReportsController extends Controller
 
     public function exportExcel(Request $request)
     {
+        $user = $request->user();
+        
         $query = Sampling::with(['investor', 'samples'])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });
+
+        // Investors can only see their own samplings
+        if ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+        }
+
+        // Farmers can only see samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $query->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
 
         // Apply same filters as the view
         if ($request->filled('investor_id')) {

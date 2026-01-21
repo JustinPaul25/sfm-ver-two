@@ -16,16 +16,25 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        
         $period = $request->get('period', '30days'); // 30days, month, week, day, custom
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $investorId = $request->get('investor_id');
         $cageNo = $request->get('cage_no');
+        
+        // Investors can only view their own data
+        if ($user && $user->isInvestor()) {
+            $investorId = $user->investor_id;
+        }
+        
+        // Farmers can only view their own cages (handled in getAnalytics)
 
         // Set date range based on period
         $dateRange = $this->getDateRange($period, $startDate, $endDate);
         
-        $analytics = $this->getAnalytics($dateRange['start'], $dateRange['end'], $investorId, $cageNo);
+        $analytics = $this->getAnalytics($dateRange['start'], $dateRange['end'], $investorId, $cageNo, $user);
 
         return Inertia::render('Dashboard', $analytics);
     }
@@ -65,11 +74,23 @@ class DashboardController extends Controller
         ];
     }
 
-    private function getAnalytics($startDate, $endDate, $investorId = null, $cageNo = null)
+    private function getAnalytics($startDate, $endDate, $investorId = null, $cageNo = null, $user = null)
     {
-        // Total counts
-        $totalInvestors = Investor::count();
-        $totalCages = Cage::count();
+        // Total counts (filtered by role)
+        $totalInvestorsQuery = Investor::query();
+        $totalCagesQuery = Cage::query();
+        
+        if ($user && $user->isInvestor()) {
+            $totalInvestorsQuery->where('id', $user->investor_id);
+            $totalCagesQuery->where('investor_id', $user->investor_id);
+        }
+        
+        if ($user && $user->isFarmer()) {
+            $totalCagesQuery->where('farmer_id', $user->id);
+        }
+        
+        $totalInvestors = $totalInvestorsQuery->count();
+        $totalCages = $totalCagesQuery->count();
         $totalFeedTypes = FeedType::count();
         
         // Build base query for filtering
@@ -84,6 +105,13 @@ class DashboardController extends Controller
         
         if ($cageNo) {
             $samplingQuery->where('cage_no', $cageNo);
+        }
+        
+        // Farmers can only see samplings for their own cages
+        if ($user && $user->isFarmer()) {
+            $samplingQuery->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
         }
         
         // Sampling analytics for the date range
@@ -117,7 +145,7 @@ class DashboardController extends Controller
         ')->first();
 
         // Top performing investors
-        $topInvestors = Investor::withCount(['samplings' => function($query) use ($startDate, $endDate) {
+        $topInvestorsQuery = Investor::withCount(['samplings' => function($query) use ($startDate, $endDate) {
             $query->whereBetween('date_sampling', [$startDate, $endDate]);
         }])
         ->withSum(['samples' => function($query) use ($startDate, $endDate) {
@@ -125,8 +153,13 @@ class DashboardController extends Controller
                 $q->whereBetween('date_sampling', [$startDate, $endDate]);
             });
         }], 'weight')
-        ->whereNull('deleted_at')
-        ->orderByDesc('samplings_count')
+        ->whereNull('deleted_at');
+        
+        if ($user && $user->isInvestor()) {
+            $topInvestorsQuery->where('id', $user->investor_id);
+        }
+        
+        $topInvestors = $topInvestorsQuery->orderByDesc('samplings_count')
         ->limit(5)
         ->get();
 
@@ -154,19 +187,28 @@ class DashboardController extends Controller
             ->get();
 
         // Feed type usage
-        $feedTypeUsage = Cage::selectRaw('
+        $feedTypeUsageQuery = Cage::selectRaw('
             feed_types.feed_type,
             feed_types.brand,
             COUNT(*) as cage_count
         ')
-        ->join('feed_types', 'cages.feed_types_id', '=', 'feed_types.id')
-        ->groupBy('feed_types.id', 'feed_types.feed_type', 'feed_types.brand')
+        ->join('feed_types', 'cages.feed_types_id', '=', 'feed_types.id');
+        
+        if ($user && $user->isInvestor()) {
+            $feedTypeUsageQuery->where('cages.investor_id', $user->investor_id);
+        }
+        
+        if ($user && $user->isFarmer()) {
+            $feedTypeUsageQuery->where('cages.farmer_id', $user->id);
+        }
+        
+        $feedTypeUsage = $feedTypeUsageQuery->groupBy('feed_types.id', 'feed_types.feed_type', 'feed_types.brand')
         ->orderByDesc('cage_count')
         ->limit(5)
         ->get();
 
         // Cage performance
-        $cagePerformance = Cage::selectRaw('
+        $cagePerformanceQuery = Cage::selectRaw('
             cages.id,
             cages.number_of_fingerlings,
             investors.name as investor_name,
@@ -177,14 +219,23 @@ class DashboardController extends Controller
         ->leftJoin('samplings', 'cages.id', '=', 'samplings.cage_no')
         ->leftJoin('samples', 'samplings.id', '=', 'samples.sampling_id')
         ->whereNull('investors.deleted_at')
-        ->whereBetween('samplings.date_sampling', [$startDate, $endDate])
-        ->groupBy('cages.id', 'cages.number_of_fingerlings', 'investors.name')
+        ->whereBetween('samplings.date_sampling', [$startDate, $endDate]);
+        
+        if ($user && $user->isInvestor()) {
+            $cagePerformanceQuery->where('cages.investor_id', $user->investor_id);
+        }
+        
+        if ($user && $user->isFarmer()) {
+            $cagePerformanceQuery->where('cages.farmer_id', $user->id);
+        }
+        
+        $cagePerformance = $cagePerformanceQuery->groupBy('cages.id', 'cages.number_of_fingerlings', 'investors.name')
         ->orderByDesc('avg_sample_weight')
         ->limit(5)
         ->get();
 
         // Growth metrics
-        $growthMetrics = $this->calculateGrowthMetrics($startDate, $endDate, $investorId, $cageNo);
+        $growthMetrics = $this->calculateGrowthMetrics($startDate, $endDate, $investorId, $cageNo, $user);
 
         return [
             'analytics' => [
@@ -218,7 +269,7 @@ class DashboardController extends Controller
         ];
     }
 
-    private function calculateGrowthMetrics($startDate, $endDate, $investorId = null, $cageNo = null)
+    private function calculateGrowthMetrics($startDate, $endDate, $investorId = null, $cageNo = null, $user = null)
     {
         // Previous period for comparison
         $periodLength = $startDate->diffInDays($endDate);
@@ -236,9 +287,14 @@ class DashboardController extends Controller
         if ($cageNo) {
             $currentSamplingsQuery->where('cage_no', $cageNo);
         }
+        if ($user && $user->isFarmer()) {
+            $currentSamplingsQuery->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
         $currentSamplings = $currentSamplingsQuery->count();
         
-        $currentAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($startDate, $endDate, $investorId, $cageNo) {
+        $currentAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($startDate, $endDate, $investorId, $cageNo, $user) {
             $query->whereBetween('date_sampling', [$startDate, $endDate])
                   ->whereHas('investor', function($q) {
                       $q->whereNull('deleted_at');
@@ -248,6 +304,11 @@ class DashboardController extends Controller
             }
             if ($cageNo) {
                 $query->where('cage_no', $cageNo);
+            }
+            if ($user && $user->isFarmer()) {
+                $query->whereHas('cage', function($q) use ($user) {
+                    $q->where('farmer_id', $user->id);
+                });
             }
         });
         $currentAvgWeight = $currentAvgWeightQuery->avg('weight') ?? 0;
@@ -263,9 +324,14 @@ class DashboardController extends Controller
         if ($cageNo) {
             $previousSamplingsQuery->where('cage_no', $cageNo);
         }
+        if ($user && $user->isFarmer()) {
+            $previousSamplingsQuery->whereHas('cage', function($q) use ($user) {
+                $q->where('farmer_id', $user->id);
+            });
+        }
         $previousSamplings = $previousSamplingsQuery->count();
         
-        $previousAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($previousStart, $previousEnd, $investorId, $cageNo) {
+        $previousAvgWeightQuery = Sample::whereHas('sampling', function($query) use ($previousStart, $previousEnd, $investorId, $cageNo, $user) {
             $query->whereBetween('date_sampling', [$previousStart, $previousEnd])
                   ->whereHas('investor', function($q) {
                       $q->whereNull('deleted_at');
@@ -275,6 +341,11 @@ class DashboardController extends Controller
             }
             if ($cageNo) {
                 $query->where('cage_no', $cageNo);
+            }
+            if ($user && $user->isFarmer()) {
+                $query->whereHas('cage', function($q) use ($user) {
+                    $q->where('farmer_id', $user->id);
+                });
             }
         });
         $previousAvgWeight = $previousAvgWeightQuery->avg('weight') ?? 0;
