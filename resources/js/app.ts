@@ -24,7 +24,13 @@ createInertiaApp({
             .use(ZiggyVue)
             // Integrate Pinia for state management
             .use(createPinia())
-            .use(VueSweetalert2)
+            .use(VueSweetalert2, {
+                // Ensure SweetAlert appears above all other modals
+                heightAuto: false,
+                customClass: {
+                    container: 'swal2-container-high-z'
+                }
+            })
             .mount(el);
     },
     progress: {

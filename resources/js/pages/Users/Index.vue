@@ -78,6 +78,7 @@ const users = ref<PaginatedUsers>({
 });
 const statistics = ref<Statistics | null>(null);
 const loading = ref(false);
+const creatingUser = ref(false);
 const search = ref('');
 const roleFilter = ref('');
 const statusFilter = ref('');
@@ -98,6 +99,8 @@ const newUser = ref({
   phone: '',
   investor_id: null as number | null,
 });
+
+const validationErrors = ref<Record<string, string[]>>({});
 
 const investors = ref<Investor[]>([]);
 
@@ -203,17 +206,19 @@ function openCreateDialog() {
   newUser.value = {
     name: '',
     email: '',
-    password: '',
-    password_confirmation: '',
     role: 'farmer',
     address: '',
     phone: '',
     investor_id: null,
   };
+  validationErrors.value = {};
   showCreateDialog.value = true;
 }
 
 async function createUser() {
+  creatingUser.value = true;
+  validationErrors.value = {};
+  
   try {
     await axios.post('/users', newUser.value);
     await fetchUsers();
@@ -221,8 +226,16 @@ async function createUser() {
     showCreateDialog.value = false;
     Swal.fire({ icon: 'success', title: 'User created successfully!' });
   } catch (error: any) {
-    const message = error?.response?.data?.message || 'Failed to create user.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    // Handle validation errors
+    if (error?.response?.status === 422 && error?.response?.data?.errors) {
+      validationErrors.value = error.response.data.errors;
+    } else {
+      // For non-validation errors, show SweetAlert
+      const message = error?.response?.data?.message || 'Failed to create user.';
+      Swal.fire({ icon: 'error', title: 'Error', text: message });
+    }
+  } finally {
+    creatingUser.value = false;
   }
 }
 
@@ -505,64 +518,165 @@ onMounted(() => {
     <!-- Create User Dialog -->
     <Dialog v-model:open="showCreateDialog">
       <DialogTrigger as-child />
-      <DialogContent>
+      <DialogContent 
+        :hide-close="creatingUser"
+        @interact-outside="(e) => { 
+          // Allow SweetAlert interactions
+          const target = e.target as HTMLElement;
+          if (target?.closest('.swal2-container')) {
+            return;
+          }
+          if (creatingUser) {
+            e.preventDefault();
+          }
+        }"
+        @escape-key-down="(e) => { if (creatingUser) e.preventDefault() }"
+      >
         <DialogHeader>
           <DialogTitle>Create User</DialogTitle>
         </DialogHeader>
         <form @submit.prevent="createUser" class="flex flex-col gap-4 mt-2">
           <div class="flex flex-col gap-1">
             <label for="name" class="text-sm font-medium">Name</label>
-            <Input id="name" v-model="newUser.name" type="text" placeholder="Enter name" required />
+            <Input 
+              id="name" 
+              v-model="newUser.name" 
+              type="text" 
+              placeholder="Enter name" 
+              required 
+              :disabled="creatingUser"
+              :class="{ 'border-red-500': validationErrors.name }"
+            />
+            <p v-if="validationErrors.name" class="text-xs text-red-500 mt-1">
+              {{ validationErrors.name[0] }}
+            </p>
           </div>
           <div class="flex flex-col gap-1">
             <label for="email" class="text-sm font-medium">Email</label>
-            <Input id="email" v-model="newUser.email" type="email" placeholder="Enter email" required />
+            <Input 
+              id="email" 
+              v-model="newUser.email" 
+              type="email" 
+              placeholder="Enter email" 
+              required 
+              :disabled="creatingUser"
+              :class="{ 'border-red-500': validationErrors.email }"
+            />
+            <p v-if="validationErrors.email" class="text-xs text-red-500 mt-1">
+              {{ validationErrors.email[0] }}
+            </p>
           </div>
           <div class="flex flex-col gap-1">
             <label for="role" class="text-sm font-medium">Role</label>
-            <select id="role" v-model="newUser.role" class="input w-full rounded border p-2" required>
+            <select 
+              id="role" 
+              v-model="newUser.role" 
+              class="input w-full rounded border p-2" 
+              required 
+              :disabled="creatingUser"
+              :class="{ 'border-red-500': validationErrors.role }"
+            >
               <option value="farmer">Farmer</option>
               <option value="investor">Investor</option>
               <option value="admin">Admin</option>
             </select>
+            <p v-if="validationErrors.role" class="text-xs text-red-500 mt-1">
+              {{ validationErrors.role[0] }}
+            </p>
           </div>
 
           <!-- Investor-specific fields -->
           <template v-if="newUser.role === 'investor'">
             <div class="flex flex-col gap-1">
               <label for="address" class="text-sm font-medium">Address</label>
-              <Input id="address" v-model="newUser.address" type="text" placeholder="Enter address" required />
+              <Input 
+                id="address" 
+                v-model="newUser.address" 
+                type="text" 
+                placeholder="Enter address" 
+                required 
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.address }"
+              />
+              <p v-if="validationErrors.address" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.address[0] }}
+              </p>
             </div>
             <div class="flex flex-col gap-1">
-              <label for="phone" class="text-sm font-medium">Phone</label>
-              <Input id="phone" v-model="newUser.phone" type="text" placeholder="Enter phone number" required />
+              <label for="phone" class="text-sm font-medium">Phone Number</label>
+              <Input 
+                id="phone" 
+                v-model="newUser.phone" 
+                type="text" 
+                placeholder="e.g., +639123456789 or 09123456789" 
+                required 
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.phone }"
+              />
+              <p v-if="validationErrors.phone" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.phone[0] }}
+              </p>
+              <p v-else class="text-xs text-muted-foreground mt-1">
+                Enter a valid PH mobile number (e.g., +639123456789, 09123456789, or 9123456789)
+              </p>
             </div>
           </template>
 
           <!-- Farmer-specific fields -->
           <template v-if="newUser.role === 'farmer'">
             <div class="flex flex-col gap-1">
+              <label for="phone_farmer" class="text-sm font-medium">Phone Number</label>
+              <Input 
+                id="phone_farmer" 
+                v-model="newUser.phone" 
+                type="text" 
+                placeholder="e.g., +639123456789 or 09123456789" 
+                required 
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.phone }"
+              />
+              <p v-if="validationErrors.phone" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.phone[0] }}
+              </p>
+              <p v-else class="text-xs text-muted-foreground mt-1">
+                Enter a valid PH mobile number (e.g., +639123456789, 09123456789, or 9123456789)
+              </p>
+            </div>
+            <div class="flex flex-col gap-1">
               <label for="investor_id" class="text-sm font-medium">Investor</label>
-              <select id="investor_id" v-model="newUser.investor_id" class="input w-full rounded border p-2" required>
+              <select 
+                id="investor_id" 
+                v-model="newUser.investor_id" 
+                class="input w-full rounded border p-2" 
+                required 
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.investor_id }"
+              >
                 <option :value="null" disabled>Select an investor</option>
                 <option v-for="investor in investors" :key="investor.id" :value="investor.id">
                   {{ investor.name }}
                 </option>
               </select>
+              <p v-if="validationErrors.investor_id" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.investor_id[0] }}
+              </p>
             </div>
           </template>
 
-          <div class="flex flex-col gap-1">
-            <label for="password" class="text-sm font-medium">Password</label>
-            <Input id="password" v-model="newUser.password" type="password" placeholder="Enter password" required />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label for="password_confirmation" class="text-sm font-medium">Confirm Password</label>
-            <Input id="password_confirmation" v-model="newUser.password_confirmation" type="password" placeholder="Confirm password" required />
+          <div class="bg-blue-50 dark:bg-blue-950 p-3 rounded-md border border-blue-200 dark:border-blue-800">
+            <p class="text-sm text-blue-800 dark:text-blue-200">
+              <strong>Note:</strong> A secure password will be automatically generated and sent to the user's email address.
+            </p>
           </div>
           <DialogFooter class="flex justify-end gap-2 mt-4">
-            <Button type="button" variant="secondary" @click="showCreateDialog = false">Cancel</Button>
-            <Button type="submit" variant="default">Create</Button>
+            <Button type="button" variant="secondary" @click="showCreateDialog = false" :disabled="creatingUser">Cancel</Button>
+            <Button type="submit" variant="default" :disabled="creatingUser">
+              <svg v-if="creatingUser" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ creatingUser ? 'Creating...' : 'Create' }}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

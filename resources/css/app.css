@@ -185,3 +185,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Ensure SweetAlert2 appears above all dialogs */
+.swal2-container,
+.swal2-container.swal2-container-high-z {
+  z-index: 99999 !important;
+}
+
+.swal2-container .swal2-popup {
+  z-index: 100000 !important;
+}

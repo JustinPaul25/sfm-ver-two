@@ -9,6 +9,8 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
+use Illuminate\Support\Str;
+use App\Notifications\UserCreatedNotification;
 
 class UserController extends Controller
 {
@@ -90,20 +92,43 @@ class UserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:users',
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:farmer,investor,admin',
             // Required for investor role
             'address' => 'required_if:role,investor|string|max:255',
-            'phone' => 'required_if:role,investor|string|max:255',
+            // Required for farmer and investor roles
+            'phone' => [
+                'required_if:role,farmer,investor',
+                'string',
+                'regex:/^(\+63|0)?9\d{9}$/',
+            ],
             // Required for farmer role
-            'investor_id' => 'required_if:role,farmer|exists:investors,id',
+            'investor_id' => 'nullable|required_if:role,farmer|exists:investors,id',
+        ], [
+            'phone.regex' => 'The phone number must be a valid Philippine mobile number (e.g., +639123456789, 09123456789, or 9123456789).',
         ]);
 
-        $user = DB::transaction(function () use ($request) {
+        // Generate a random secure password
+        $generatedPassword = Str::password(12, true, true, false, false);
+
+        $user = DB::transaction(function () use ($request, $generatedPassword) {
+            // Normalize phone number format to +63XXXXXXXXXX (if phone is provided)
+            $normalizedPhone = null;
+            if ($request->has('phone') && $request->phone) {
+                $phone = $request->phone;
+                $phone = preg_replace('/\D/', '', $phone); // Remove non-digits
+                if (strlen($phone) === 10) {
+                    $phone = '63' . $phone; // 9XXXXXXXXX -> 639XXXXXXXXX
+                } else if (strlen($phone) === 11 && $phone[0] === '0') {
+                    $phone = '63' . substr($phone, 1); // 09XXXXXXXXX -> 639XXXXXXXXX
+                }
+                $normalizedPhone = '+' . $phone;
+            }
+
             $userData = [
                 'name' => $request->name,
                 'email' => $request->email,
-                'password' => Hash::make($request->password),
+                'phone' => $normalizedPhone,
+                'password' => Hash::make($generatedPassword),
                 'role' => $request->role,
                 'is_active' => true,
                 'email_verified_at' => now(),
@@ -114,7 +139,7 @@ class UserController extends Controller
                 $investor = Investor::create([
                     'name' => $request->name,
                     'address' => $request->address,
-                    'phone' => $request->phone,
+                    'phone' => $normalizedPhone,
                 ]);
                 $userData['investor_id'] = $investor->id;
             }
@@ -127,10 +152,13 @@ class UserController extends Controller
             return User::create($userData);
         });
 
+        // Send email notification with the generated password
+        $user->notify(new UserCreatedNotification($generatedPassword, $user->role));
+
         $user->load('investor');
 
         return response()->json([
-            'message' => 'User created successfully',
+            'message' => 'User created successfully. Login credentials have been sent to their email.',
             'user' => $user
         ]);
     }
