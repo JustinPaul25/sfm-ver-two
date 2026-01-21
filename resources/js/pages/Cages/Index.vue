@@ -19,12 +19,18 @@ import Swal from 'sweetalert2';
 const page = usePage<SharedData>();
 const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
 const isInvestor = computed(() => userRole.value === 'investor');
+const isAdmin = computed(() => userRole.value === 'admin');
 
 interface Cage {
   id: number;
   number_of_fingerlings: number;
   feed_types_id: number;
   investor_id: number;
+  farmer_id?: number | null;
+  farmer?: {
+    id: number;
+    name: string;
+  };
 }
 
 interface FeedType {
@@ -36,6 +42,12 @@ interface FeedType {
 interface Investor {
   id: number;
   name: string;
+}
+
+interface Farmer {
+  id: number;
+  name: string;
+  email: string;
 }
 
 interface PaginatedCages {
@@ -67,6 +79,8 @@ const feedTypes = computed<FeedType[]>(() => {
   return data?.data || [];
 });
 const investors = computed<Investor[]>(() => investorStore.investorsSelect as Investor[]);
+const farmers = ref<Farmer[]>([]);
+const farmersForEdit = ref<Farmer[]>([]);
 
 const cages = computed<Cage[]>(() => store.cages?.data || []);
 const pagination = computed(() => {
@@ -81,10 +95,11 @@ const pagination = computed(() => {
   } : null;
 });
 
-const newCage = ref<Pick<Cage, 'number_of_fingerlings' | 'feed_types_id' | 'investor_id'>>({
+const newCage = ref<Pick<Cage, 'number_of_fingerlings' | 'feed_types_id' | 'investor_id' | 'farmer_id'>>({
   number_of_fingerlings: 0,
   feed_types_id: 0,
   investor_id: 0,
+  farmer_id: null,
 });
 
 // Weather variables and functions
@@ -194,12 +209,49 @@ function getPageNumbers() {
   return [...new Set(pages)].sort((a, b) => a - b);
 }
 
+async function fetchFarmersByInvestor(investorId: number | null) {
+  if (!investorId) {
+    farmers.value = [];
+    return;
+  }
+  try {
+    const response = await fetch(`/users/farmers-by-investor?investor_id=${investorId}`);
+    if (response.ok) {
+      farmers.value = await response.json();
+    }
+  } catch (error) {
+    console.error('Error fetching farmers:', error);
+    farmers.value = [];
+  }
+}
+
+async function fetchFarmersForEdit(investorId: number | null) {
+  if (!investorId) {
+    farmersForEdit.value = [];
+    return;
+  }
+  try {
+    const response = await fetch(`/users/farmers-by-investor?investor_id=${investorId}`);
+    if (response.ok) {
+      farmersForEdit.value = await response.json();
+    }
+  } catch (error) {
+    console.error('Error fetching farmers:', error);
+    farmersForEdit.value = [];
+  }
+}
+
 function openCreateDialog() {
   newCage.value = {
     number_of_fingerlings: 0,
     feed_types_id: feedTypes.value[0]?.id || 0,
     investor_id: investors.value[0]?.id || 0,
+    farmer_id: null,
   };
+  // Fetch farmers for the default investor
+  if (investors.value[0]?.id) {
+    fetchFarmersByInvestor(investors.value[0].id);
+  }
   showCreateDialog.value = true;
 }
 
@@ -235,6 +287,10 @@ async function deleteCage() {
 
 function openEditDialog(c: Cage) {
   editCage.value = { ...c };
+  // Fetch farmers for this cage's investor
+  if (c.investor_id) {
+    fetchFarmersForEdit(c.investor_id);
+  }
   showEditDialog.value = true;
 }
 
@@ -245,6 +301,7 @@ async function updateCageHandler() {
         number_of_fingerlings: editCage.value.number_of_fingerlings,
         feed_types_id: editCage.value.feed_types_id,
         investor_id: editCage.value.investor_id,
+        farmer_id: editCage.value.farmer_id,
       });
       await store.fetchCages();
       showEditDialog.value = false;
@@ -287,15 +344,16 @@ onMounted(() => {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Number of Fingerlings</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feed Type</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Investor</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Farmer</th>
               <th class="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="store.loading" class="animate-pulse">
-              <td colspan="5" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+              <td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading...</td>
             </tr>
             <tr v-else-if="cages.length === 0">
-              <td colspan="5" class="px-6 py-4 text-center text-gray-500">No cages found.</td>
+              <td colspan="6" class="px-6 py-4 text-center text-gray-500">No cages found.</td>
             </tr>
             <tr v-else v-for="c in cages" :key="c?.id">
               <td class="px-6 py-4 whitespace-nowrap font-medium">{{ c?.id }}</td>
@@ -305,6 +363,9 @@ onMounted(() => {
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 {{ investors.find(i => i.id === c?.investor_id)?.name || c?.investor_id }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ c?.farmer?.name || '-' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex gap-1">
@@ -395,7 +456,13 @@ onMounted(() => {
         <form @submit.prevent="createCage" class="flex flex-col gap-4 mt-2">
           <div class="flex flex-col gap-1">
             <label for="investor" class="text-sm font-medium">Investor</label>
-            <select id="investor" v-model="newCage.investor_id" class="input w-full rounded border p-2" required>
+            <select 
+              id="investor" 
+              v-model="newCage.investor_id" 
+              @change="fetchFarmersByInvestor(newCage.investor_id)"
+              class="input w-full rounded border p-2" 
+              required
+            >
               <option v-for="inv in investors" :key="inv.id" :value="inv.id" class="bg-background text-foreground">{{ inv.name }}</option>
             </select>
           </div>
@@ -408,6 +475,16 @@ onMounted(() => {
             <select id="feedType" v-model="newCage.feed_types_id" class="input w-full rounded border p-2" required>
               <option v-for="f in feedTypes" :key="f.id" :value="f.id" class="bg-background text-foreground">{{ f.feed_type }}</option>
             </select>
+          </div>
+          <div v-if="isAdmin" class="flex flex-col gap-1">
+            <label for="farmer" class="text-sm font-medium">Assign Farmer (Optional)</label>
+            <select id="farmer" v-model="newCage.farmer_id" class="input w-full rounded border p-2">
+              <option :value="null">No farmer assigned</option>
+              <option v-for="farmer in farmers" :key="farmer.id" :value="farmer.id" class="bg-background text-foreground">
+                {{ farmer.name }}
+              </option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Only farmers belonging to the selected investor are shown</p>
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-sm font-medium">Weather Condition</label>
@@ -451,13 +528,38 @@ onMounted(() => {
           <DialogTitle>Edit Cage</DialogTitle>
         </DialogHeader>
         <form @submit.prevent="updateCageHandler" class="flex flex-col gap-4 mt-2">
-          <Input v-model="editCage.number_of_fingerlings" type="number" placeholder="Number of Fingerlings" required />
-          <select v-model="editCage.feed_types_id" class="input w-full rounded border p-2" required>
-            <option v-for="f in feedTypes" :key="f.id" :value="f.id" class="bg-background text-foreground">{{ f.feed_type }}</option>
-          </select>
-          <select v-model="editCage.investor_id" class="input w-full rounded border p-2" required>
-            <option v-for="inv in investors" :key="inv.id" :value="inv.id" class="bg-background text-foreground">{{ inv.name }}</option>
-          </select>
+          <div class="flex flex-col gap-1">
+            <label for="edit_investor" class="text-sm font-medium">Investor</label>
+            <select 
+              id="edit_investor"
+              v-model="editCage.investor_id" 
+              @change="fetchFarmersForEdit(editCage.investor_id)"
+              class="input w-full rounded border p-2" 
+              required
+            >
+              <option v-for="inv in investors" :key="inv.id" :value="inv.id" class="bg-background text-foreground">{{ inv.name }}</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="edit_fingerlings" class="text-sm font-medium">Number of Fingerlings</label>
+            <Input id="edit_fingerlings" v-model="editCage.number_of_fingerlings" type="number" placeholder="Number of Fingerlings" required />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="edit_feedType" class="text-sm font-medium">Feed Type</label>
+            <select id="edit_feedType" v-model="editCage.feed_types_id" class="input w-full rounded border p-2" required>
+              <option v-for="f in feedTypes" :key="f.id" :value="f.id" class="bg-background text-foreground">{{ f.feed_type }}</option>
+            </select>
+          </div>
+          <div v-if="isAdmin" class="flex flex-col gap-1">
+            <label for="edit_farmer" class="text-sm font-medium">Assign Farmer (Optional)</label>
+            <select id="edit_farmer" v-model="editCage.farmer_id" class="input w-full rounded border p-2">
+              <option :value="null">No farmer assigned</option>
+              <option v-for="farmer in farmersForEdit" :key="farmer.id" :value="farmer.id" class="bg-background text-foreground">
+                {{ farmer.name }}
+              </option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Only farmers belonging to the selected investor are shown</p>
+          </div>
           <DialogFooter class="flex justify-end gap-2 mt-4">
             <Button type="button" variant="secondary" @click="showEditDialog = false">Cancel</Button>
             <Button type="submit" variant="default">Update</Button>

@@ -95,16 +95,29 @@ class CageController extends Controller
             'number_of_fingerlings' => 'required|integer',
             'feed_types_id' => 'required|exists:feed_types,id',
             'investor_id' => 'required|exists:investors,id',
+            'farmer_id' => 'nullable|exists:users,id',
         ]);
 
         $data = $request->all();
         
-        // Automatically assign farmer_id if user is a farmer
+        // Only admin can assign farmers to cages
+        // Farmers creating cages are automatically assigned to their own cages
         if ($user && $user->isFarmer()) {
             $data['farmer_id'] = $user->id;
         }
 
+        // Validate that farmer belongs to the same investor
+        if (isset($data['farmer_id'])) {
+            $farmer = \App\Models\User::find($data['farmer_id']);
+            if ($farmer && $farmer->investor_id != $data['investor_id']) {
+                return response()->json([
+                    'message' => 'Farmer must belong to the same investor'
+                ], 422);
+            }
+        }
+
         $cage = Cage::create($data);
+        $cage->load(['investor', 'farmer', 'feedType']);
 
         return response()->json([
             'message' => 'Cage created successfully',
@@ -123,7 +136,7 @@ class CageController extends Controller
             ], 403);
         }
 
-        // Farmers can only update their own cages
+        // Farmers can only update their own cages (but cannot reassign farmer)
         if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
             return response()->json([
                 'message' => 'You can only update your own cages'
@@ -134,9 +147,28 @@ class CageController extends Controller
             'number_of_fingerlings' => 'required|integer',
             'feed_types_id' => 'required|exists:feed_types,id',
             'investor_id' => 'required|exists:investors,id',
+            'farmer_id' => 'nullable|exists:users,id',
         ]);
 
-        $cage->update($request->all());
+        $data = $request->all();
+
+        // Farmers cannot change the farmer assignment
+        if ($user && $user->isFarmer()) {
+            unset($data['farmer_id']);
+        }
+
+        // Validate that farmer belongs to the same investor
+        if (isset($data['farmer_id']) && $data['farmer_id']) {
+            $farmer = \App\Models\User::find($data['farmer_id']);
+            if ($farmer && $farmer->investor_id != $data['investor_id']) {
+                return response()->json([
+                    'message' => 'Farmer must belong to the same investor'
+                ], 422);
+            }
+        }
+
+        $cage->update($data);
+        $cage->load(['investor', 'farmer', 'feedType']);
 
         return response()->json([
             'message' => 'Cage updated successfully',

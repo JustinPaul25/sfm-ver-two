@@ -29,6 +29,18 @@ interface User {
   role: 'farmer' | 'investor' | 'admin';
   is_active: boolean;
   created_at: string;
+  investor_id?: number;
+  investor?: {
+    id: number;
+    name: string;
+  };
+}
+
+interface Investor {
+  id: number;
+  name: string;
+  address: string;
+  phone: string;
 }
 
 interface PaginatedUsers {
@@ -82,7 +94,12 @@ const newUser = ref({
   password: '',
   password_confirmation: '',
   role: 'farmer' as 'farmer' | 'investor' | 'admin',
+  address: '',
+  phone: '',
+  investor_id: null as number | null,
 });
+
+const investors = ref<Investor[]>([]);
 
 const pagination = computed(() => {
   return users.value ? {
@@ -142,6 +159,15 @@ async function fetchStatistics() {
   }
 }
 
+async function fetchInvestors() {
+  try {
+    const response = await axios.get('/investors/select');
+    investors.value = response.data;
+  } catch (error) {
+    console.error('Error fetching investors:', error);
+  }
+}
+
 function handleSearch() {
   users.value.current_page = 1;
   fetchUsers();
@@ -180,6 +206,9 @@ function openCreateDialog() {
     password: '',
     password_confirmation: '',
     role: 'farmer',
+    address: '',
+    phone: '',
+    investor_id: null,
   };
   showCreateDialog.value = true;
 }
@@ -269,6 +298,7 @@ async function deleteUser() {
 onMounted(() => {
   fetchUsers();
   fetchStatistics();
+  fetchInvestors();
 });
 </script>
 
@@ -356,6 +386,7 @@ onMounted(() => {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Investor</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
               <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -363,10 +394,10 @@ onMounted(() => {
           </thead>
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="loading" class="animate-pulse">
-              <td colspan="6" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+              <td colspan="7" class="px-6 py-4 text-center text-gray-500">Loading...</td>
             </tr>
             <tr v-else-if="users.data.length === 0">
-              <td colspan="6" class="px-6 py-4 text-center text-gray-500">No users found.</td>
+              <td colspan="7" class="px-6 py-4 text-center text-gray-500">No users found.</td>
             </tr>
             <tr v-else v-for="user in users.data" :key="user.id">
               <td class="px-6 py-4 whitespace-nowrap font-medium">{{ user.name }}</td>
@@ -382,6 +413,9 @@ onMounted(() => {
                   <option value="investor">Investor</option>
                   <option value="admin">Admin</option>
                 </select>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ user.investor?.name || '-' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span 
@@ -492,6 +526,32 @@ onMounted(() => {
               <option value="admin">Admin</option>
             </select>
           </div>
+
+          <!-- Investor-specific fields -->
+          <template v-if="newUser.role === 'investor'">
+            <div class="flex flex-col gap-1">
+              <label for="address" class="text-sm font-medium">Address</label>
+              <Input id="address" v-model="newUser.address" type="text" placeholder="Enter address" required />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="phone" class="text-sm font-medium">Phone</label>
+              <Input id="phone" v-model="newUser.phone" type="text" placeholder="Enter phone number" required />
+            </div>
+          </template>
+
+          <!-- Farmer-specific fields -->
+          <template v-if="newUser.role === 'farmer'">
+            <div class="flex flex-col gap-1">
+              <label for="investor_id" class="text-sm font-medium">Investor</label>
+              <select id="investor_id" v-model="newUser.investor_id" class="input w-full rounded border p-2" required>
+                <option :value="null" disabled>Select an investor</option>
+                <option v-for="investor in investors" :key="investor.id" :value="investor.id">
+                  {{ investor.name }}
+                </option>
+              </select>
+            </div>
+          </template>
+
           <div class="flex flex-col gap-1">
             <label for="password" class="text-sm font-medium">Password</label>
             <Input id="password" v-model="newUser.password" type="password" placeholder="Enter password" required />

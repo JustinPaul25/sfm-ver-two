@@ -101,6 +101,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('users', [UserController::class, 'index'])->name('users.index');
     Route::get('users/list', [UserController::class, 'list'])->name('users.list');
     Route::get('users/statistics', [UserController::class, 'statistics'])->name('users.statistics');
+    Route::get('users/farmers-by-investor', [UserController::class, 'getFarmersByInvestor'])->name('users.farmers-by-investor');
     Route::post('users', [UserController::class, 'store'])->name('users.store');
     Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::put('users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');

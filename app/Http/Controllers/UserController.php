@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Investor;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules;
 
 class UserController extends Controller
@@ -23,7 +25,7 @@ class UserController extends Controller
      */
     public function list(Request $request)
     {
-        $query = User::query();
+        $query = User::with('investor');
 
         // Search functionality
         if ($request->has('search') && $request->get('search')) {
@@ -62,6 +64,25 @@ class UserController extends Controller
     }
 
     /**
+     * Get farmers list by investor (admin only).
+     */
+    public function getFarmersByInvestor(Request $request)
+    {
+        $investorId = $request->get('investor_id');
+        
+        $query = User::where('role', 'farmer')
+                     ->where('is_active', true);
+
+        if ($investorId) {
+            $query->where('investor_id', $investorId);
+        }
+
+        $farmers = $query->get();
+
+        return response()->json($farmers);
+    }
+
+    /**
      * Create a new user (admin only).
      */
     public function store(Request $request)
@@ -71,16 +92,42 @@ class UserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'role' => 'required|in:farmer,investor,admin',
+            // Required for investor role
+            'address' => 'required_if:role,investor|string|max:255',
+            'phone' => 'required_if:role,investor|string|max:255',
+            // Required for farmer role
+            'investor_id' => 'required_if:role,farmer|exists:investors,id',
         ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => $request->role,
-            'is_active' => true,
-            'email_verified_at' => now(),
-        ]);
+        $user = DB::transaction(function () use ($request) {
+            $userData = [
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'role' => $request->role,
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ];
+
+            // If creating an investor, create the Investor record first
+            if ($request->role === 'investor') {
+                $investor = Investor::create([
+                    'name' => $request->name,
+                    'address' => $request->address,
+                    'phone' => $request->phone,
+                ]);
+                $userData['investor_id'] = $investor->id;
+            }
+
+            // If creating a farmer, link to the specified investor
+            if ($request->role === 'farmer') {
+                $userData['investor_id'] = $request->investor_id;
+            }
+
+            return User::create($userData);
+        });
+
+        $user->load('investor');
 
         return response()->json([
             'message' => 'User created successfully',
