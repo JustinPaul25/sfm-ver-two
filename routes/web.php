@@ -78,7 +78,6 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('cages/feeding-schedules/{schedule}', [CageFeedingScheduleController::class, 'destroy'])->name('cages.feeding-schedules.destroy');
     Route::post('cages/feeding-schedules/{schedule}/activate', [CageFeedingScheduleController::class, 'activate'])->name('cages.feeding-schedules.activate');
     Route::get('cages/feeding-schedules/today', [CageFeedingScheduleController::class, 'getTodaySchedule'])->name('cages.feeding-schedules.today');
-    Route::get('cages/feeding-schedules/weekly-print-data', [CageFeedingScheduleController::class, 'weeklyPrintData'])->name('cages.feeding-schedules.weekly-print-data');
 
     // ReportsController
     Route::get('reports', [ReportsController::class, 'index'])->name('reports.index');

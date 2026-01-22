@@ -182,92 +182,13 @@ const activateSchedule = async (scheduleId: number) => {
   }
 };
 
-const formatTimePrint = (time: string) => {
-  if (!time) return '–';
-  const [h, m] = time.split(':').map(Number);
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour = h % 12 || 12;
-  return `${hour}:${m.toString().padStart(2, '0')} ${period}`;
-};
-
-const printWeeklySchedule = () => {
-  const s = activeSchedule.value;
-  const c = cage.value;
-  if (!s || !c) return;
-
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const dayRows = days.map(
-    (day) => `
-    <tr>
-      <td class="day">${day}</td>
-      ${(s.feeding_times || []).map((t: string, i: number) => {
-        const amt = (s.feeding_amounts || [])[i];
-        return `<td>${formatTimePrint(t)}</td><td>${amt != null ? Number(amt).toFixed(2) : '0.00'} kg</td>`;
-      }).join('')}
-      <td class="total">${Number(s.total_daily_amount || 0).toFixed(2)} kg</td>
-    </tr>`
-  ).join('');
-
-  const headerCells = (s.feeding_times || []).map((_: string, i: number) => 
-    `<th colspan="2">Feeding ${i + 1}</th>`
-  ).join('');
-
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Weekly Feeding Schedule - Cage #${c.id}</title>
-  <style>
-    body { font-family: system-ui, sans-serif; padding: 24px; color: #111; max-width: 900px; margin: 0 auto; }
-    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-    .sub { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    th { background: #f5f5f5; font-weight: 600; }
-    .day { font-weight: 500; width: 120px; }
-    .total { font-weight: 600; background: #f0f9ff; }
-    td:not(.day):not(.total) { text-align: center; }
-  </style>
-</head>
-<body>
-  <h1>Weekly Feeding Schedule</h1>
-  <p class="sub">${c.investor?.name || 'Cage'} – Cage #${c.id} • ${c.number_of_fingerlings?.toLocaleString()} fish • ${c.feedType?.feed_type || 'N/A'}</p>
-  <p class="sub"><strong>Schedule:</strong> ${s.schedule_name} • Total daily: ${Number(s.total_daily_amount || 0).toFixed(2)} kg</p>
-  <table>
-    <thead>
-      <tr>
-        <th>Day</th>
-        ${headerCells}
-        <th>Total (kg)</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${dayRows}
-    </tbody>
-  </table>
-  <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #666;">Generated on ${new Date().toLocaleString()} • Smart Fish Morphometrics</p>
-</body>
-</html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  w.onload = () => {
-    w.print();
-    w.onafterprint = () => w.close();
-  };
-};
-
 const autoGenerateForCage = async () => {
   if (!confirm('This will replace the current schedule with an auto-generated one. Continue?')) return;
   
   loading.value = true;
   try {
     const response = await axios.post('/cages/feeding-schedules/auto-generate', {
-      cage_ids: [cage.value?.id],
+      cage_ids: [cage.id],
       overwrite_existing: true,
     });
     
@@ -329,15 +250,12 @@ onMounted(() => {
               Active Schedule
             </span>
           </div>
-          <div class="flex gap-2 flex-wrap">
+          <div class="flex gap-2">
             <Button variant="outline" @click="openForm(activeSchedule)">
               ✏️ Edit
             </Button>
             <Button variant="outline" @click="openForm()">
               ➕ New Schedule
-            </Button>
-            <Button variant="outline" @click="printWeeklySchedule" class="bg-amber-50 text-amber-800 hover:bg-amber-100">
-              🖨️ Print Weekly Schedule
             </Button>
             <Button variant="outline" @click="autoGenerateForCage" class="bg-blue-50 text-blue-700 hover:bg-blue-100">
               🚀 Auto-Generate
