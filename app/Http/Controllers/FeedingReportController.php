@@ -161,22 +161,28 @@ class FeedingReportController extends Controller
         
         while ($currentDate <= $endDate) {
             $dateStr = $currentDate->format('Y-m-d');
-            $consumption = $consumptions->firstWhere('consumption_date', $dateStr);
+            // Match consumption by comparing dates (consumption_date is cast to Carbon date)
+            $consumption = $consumptions->first(function ($item) use ($currentDate) {
+                return $item->consumption_date->isSameDay($currentDate);
+            });
             
             $scheduledAmount = $schedule ? (float) $schedule->total_daily_amount : 0;
             $actualAmount = $consumption ? (float) $consumption->feed_amount : 0;
             
-            $dailyBreakdown[] = [
-                'date' => $dateStr,
-                'day_name' => $currentDate->format('l'),
-                'scheduled_amount' => $scheduledAmount,
-                'actual_amount' => $actualAmount,
-                'variance' => $actualAmount - $scheduledAmount,
-                'adherence_rate' => $scheduledAmount > 0 
-                    ? round(($actualAmount / $scheduledAmount) * 100, 1)
-                    : 0,
-                'notes' => $consumption ? $consumption->notes : null,
-            ];
+            // Only include days with actual consumption data
+            if ($actualAmount > 0) {
+                $dailyBreakdown[] = [
+                    'date' => $dateStr,
+                    'day_name' => $currentDate->format('l'),
+                    'scheduled_amount' => $scheduledAmount,
+                    'actual_amount' => $actualAmount,
+                    'variance' => $actualAmount - $scheduledAmount,
+                    'adherence_rate' => $scheduledAmount > 0 
+                        ? round(($actualAmount / $scheduledAmount) * 100, 1)
+                        : 0,
+                    'notes' => $consumption ? $consumption->notes : null,
+                ];
+            }
             
             $currentDate->addDay();
         }

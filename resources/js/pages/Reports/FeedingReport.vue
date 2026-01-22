@@ -11,6 +11,11 @@ import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Label from '@/components/ui/label/Label.vue';
 import Separator from '@/components/ui/separator/Separator.vue';
+import Dialog from '@/components/ui/dialog/Dialog.vue';
+import DialogContent from '@/components/ui/dialog/DialogContent.vue';
+import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
+import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
+import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
 
 interface DailyBreakdown {
   date: string;
@@ -87,6 +92,18 @@ const selectedCage = ref<string>('');
 
 // Expanded cages for daily breakdown
 const expandedCages = ref<Set<number>>(new Set());
+
+// Add consumption dialog
+const showAddConsumptionDialog = ref(false);
+const addingConsumption = ref(false);
+const selectedCageForConsumption = ref<number | null>(null);
+const selectedDateForConsumption = ref<string>('');
+const newConsumption = ref({
+  day_number: 1,
+  feed_amount: '',
+  consumption_date: '',
+  notes: ''
+});
 
 // Set default dates to current week
 const setDefaultDates = () => {
@@ -180,6 +197,57 @@ const resetFilters = () => {
   selectedInvestor.value = '';
   selectedCage.value = '';
   fetchReport();
+};
+
+const openAddConsumptionDialog = (cageId: number, date: string, scheduledAmount: number) => {
+  selectedCageForConsumption.value = cageId;
+  selectedDateForConsumption.value = date;
+  
+  // Calculate day number (approximate - you may need to adjust based on your logic)
+  const dateObj = new Date(date);
+  const today = new Date();
+  const diffTime = Math.abs(today.getTime() - dateObj.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  newConsumption.value = {
+    day_number: diffDays || 1,
+    feed_amount: scheduledAmount > 0 ? scheduledAmount.toString() : '',
+    consumption_date: date,
+    notes: ''
+  };
+  showAddConsumptionDialog.value = true;
+};
+
+const addConsumption = async () => {
+  if (!selectedCageForConsumption.value || !newConsumption.value.feed_amount) {
+    alert('Please fill in all required fields');
+    return;
+  }
+
+  addingConsumption.value = true;
+  try {
+    await router.post(
+      `/cages/${selectedCageForConsumption.value}/feed-consumptions`,
+      newConsumption.value,
+      {
+        onSuccess: () => {
+          showAddConsumptionDialog.value = false;
+          fetchReport(); // Refresh the report
+        },
+        onError: (errors) => {
+          const errorMessage = errors.message || Object.values(errors)[0] || 'Error adding feed consumption';
+          alert(errorMessage);
+        },
+        onFinish: () => {
+          addingConsumption.value = false;
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Error adding feed consumption:', error);
+    alert('Error adding feed consumption');
+    addingConsumption.value = false;
+  }
 };
 
 onMounted(() => {
@@ -453,7 +521,21 @@ onMounted(() => {
                         <td class="px-4 py-2">{{ formatDate(day.date) }}</td>
                         <td class="px-4 py-2">{{ day.day_name }}</td>
                         <td class="px-4 py-2 text-right">{{ day.scheduled_amount.toFixed(2) }}</td>
-                        <td class="px-4 py-2 text-right font-medium">{{ day.actual_amount.toFixed(2) }}</td>
+                        <td class="px-4 py-2 text-right font-medium">
+                          <div class="flex items-center justify-end gap-2">
+                            <span>{{ day.actual_amount.toFixed(2) }}</span>
+                            <Button
+                              v-if="day.actual_amount === 0"
+                              variant="ghost"
+                              size="sm"
+                              @click="openAddConsumptionDialog(cage.cage_id, day.date, day.scheduled_amount)"
+                              class="h-6 px-2 text-xs print:hidden"
+                              title="Add consumption for this day"
+                            >
+                              +
+                            </Button>
+                          </div>
+                        </td>
                         <td class="px-4 py-2 text-right" :class="getVarianceColor(day.variance)">
                           {{ day.variance >= 0 ? '+' : '' }}{{ day.variance.toFixed(2) }}
                         </td>
@@ -493,6 +575,63 @@ onMounted(() => {
           </div>
         </CardContent>
       </Card>
+
+      <!-- Add Consumption Dialog -->
+      <Dialog v-model:open="showAddConsumptionDialog">
+        <DialogContent class="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Feed Consumption</DialogTitle>
+          </DialogHeader>
+          <div class="space-y-4">
+            <div>
+              <Label for="consumption_date">Date</Label>
+              <Input
+                id="consumption_date"
+                v-model="newConsumption.consumption_date"
+                type="date"
+                required
+              />
+            </div>
+            <div>
+              <Label for="day_number">Day Number</Label>
+              <Input
+                id="day_number"
+                v-model="newConsumption.day_number"
+                type="number"
+                min="1"
+                placeholder="Enter day number"
+                required
+              />
+            </div>
+            <div>
+              <Label for="feed_amount">Actual (kg)</Label>
+              <Input
+                id="feed_amount"
+                v-model="newConsumption.feed_amount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Enter actual feed amount consumed"
+                required
+              />
+            </div>
+            <div>
+              <Label for="notes">Notes (Optional)</Label>
+              <Input
+                id="notes"
+                v-model="newConsumption.notes"
+                placeholder="Enter any notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" @click="showAddConsumptionDialog = false">Cancel</Button>
+            <Button @click="addConsumption" :disabled="addingConsumption">
+              {{ addingConsumption ? 'Adding...' : 'Add Consumption' }}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   </AppLayout>
 </template>

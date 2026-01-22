@@ -367,9 +367,24 @@ const deleteFeedConsumption = async (consumption: FeedConsumption) => {
 
 const openEditDialog = (consumption: FeedConsumption) => {
   editingConsumption.value = consumption;
+  
+  // Convert date to YYYY-MM-DD format for date input
+  let formattedDate = '';
+  if (consumption.consumption_date) {
+    try {
+      const date = new Date(consumption.consumption_date);
+      if (!isNaN(date.getTime())) {
+        // Format as YYYY-MM-DD for date input
+        formattedDate = date.toISOString().split('T')[0];
+      }
+    } catch (e) {
+      console.error('Error parsing date:', e);
+    }
+  }
+  
   editConsumption.value = {
     feed_amount: consumption.feed_amount,
-    consumption_date: consumption.consumption_date,
+    consumption_date: formattedDate,
     notes: consumption.notes || ''
   };
   showEditDialog.value = true;

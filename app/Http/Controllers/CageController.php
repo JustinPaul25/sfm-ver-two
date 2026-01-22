@@ -246,11 +246,12 @@ class CageController extends Controller
         
         $cage->load(['feedType', 'investor', 'feedingSchedule']);
         
-        // Paginate feed consumptions
+        // Paginate feed consumptions - order by latest date first
         $perPage = $request->get('per_page', 10);
         $page = $request->get('page', 1);
         $feedConsumptions = $cage->feedConsumptions()
-            ->orderBy('day_number')
+            ->orderBy('consumption_date', 'desc')
+            ->orderBy('day_number', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
         
         return Inertia::render('Cages/View', [
