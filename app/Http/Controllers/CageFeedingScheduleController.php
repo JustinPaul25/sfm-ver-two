@@ -165,6 +165,43 @@ class CageFeedingScheduleController extends Controller
         ]);
     }
 
+    public function weeklyPrintData(Request $request)
+    {
+        $user = $request->user();
+        $cageId = $request->get('cage_id');
+
+        $cagesQuery = Cage::with(['feedingSchedule', 'investor', 'feedType'])
+            ->whereHas('feedingSchedule')
+            ->orderBy('id');
+
+        if ($user && $user->isInvestor()) {
+            $cagesQuery->where('investor_id', $user->investor_id);
+        }
+        if ($user && $user->isFarmer()) {
+            $cagesQuery->where('farmer_id', $user->id);
+        }
+        if ($cageId) {
+            $cagesQuery->where('id', $cageId);
+        }
+
+        $cages = $cagesQuery->get()->map(function ($cage) {
+            $schedule = $cage->feedingSchedule;
+            return [
+                'id' => $cage->id,
+                'investor_name' => $cage->investor ? $cage->investor->name : 'N/A',
+                'feed_type' => $cage->feedType ? $cage->feedType->feed_type : 'N/A',
+                'number_of_fingerlings' => (int) $cage->number_of_fingerlings,
+                'schedule_name' => $schedule->schedule_name,
+                'feeding_times' => $schedule->feeding_times,
+                'feeding_amounts' => array_map(fn ($a) => (float) $a, $schedule->feeding_amounts),
+                'total_daily_amount' => (float) $schedule->total_daily_amount,
+                'frequency' => $schedule->frequency,
+            ];
+        });
+
+        return response()->json(['cages' => $cages]);
+    }
+
     public function getTodaySchedule(Request $request)
     {
         $user = $request->user();
