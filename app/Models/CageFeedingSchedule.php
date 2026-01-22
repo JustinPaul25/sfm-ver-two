@@ -37,6 +37,12 @@ class CageFeedingSchedule extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = [
+        'total_daily_amount',
+        'feeding_times',
+        'feeding_amounts',
+    ];
+
     public function cage()
     {
         return $this->belongsTo(Cage::class);

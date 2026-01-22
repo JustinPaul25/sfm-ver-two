@@ -244,11 +244,19 @@ class CageController extends Controller
             ], 403);
         }
         
-        $cage->load(['feedType', 'investor', 'feedConsumptions']);
+        $cage->load(['feedType', 'investor', 'feedingSchedule']);
+        
+        // Paginate feed consumptions
+        $perPage = $request->get('per_page', 10);
+        $page = $request->get('page', 1);
+        $feedConsumptions = $cage->feedConsumptions()
+            ->orderBy('day_number')
+            ->paginate($perPage, ['*'], 'page', $page);
         
         return Inertia::render('Cages/View', [
             'cage' => $cage,
-            'feedConsumptions' => $cage->feedConsumptions()->orderBy('day_number')->get()
+            'feedConsumptions' => $feedConsumptions,
+            'feedingSchedule' => $cage->feedingSchedule
         ]);
     }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Card from '@/components/ui/card/Card.vue';
 import CardContent from '@/components/ui/card/CardContent.vue';
@@ -287,7 +287,7 @@ onMounted(() => {
           <h2 class="text-xl font-semibold mb-2">Report Period</h2>
           <p class="text-muted-foreground">
             {{ formatDate(period.start_date) }} - {{ formatDate(period.end_date) }} 
-            ({{ period.days_count }} days)
+            ({{ Math.round(period.days_count) }} days)
           </p>
         </div>
 
@@ -362,7 +362,12 @@ onMounted(() => {
               <div class="flex items-start justify-between">
                 <div class="flex-1">
                   <CardTitle class="flex items-center gap-2">
-                    Cage #{{ cage.cage_number }}
+                    <Link
+                      :href="route('cages.view', cage.cage_id)"
+                      class="hover:underline text-primary focus:outline-none focus:underline"
+                    >
+                      Cage #{{ cage.cage_number }}
+                    </Link>
                     <span v-if="!cage.has_schedule" class="px-2 py-1 text-xs rounded-md bg-secondary text-secondary-foreground">No Schedule</span>
                   </CardTitle>
                   <CardDescription class="mt-2">

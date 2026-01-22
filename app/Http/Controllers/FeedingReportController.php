@@ -133,7 +133,7 @@ class FeedingReportController extends Controller
             'period' => [
                 'start_date' => $startDate->format('Y-m-d'),
                 'end_date' => $endDate->format('Y-m-d'),
-                'days_count' => $startDate->diffInDays($endDate) + 1,
+                'days_count' => (int) round($startDate->diffInDays($endDate) + 1),
             ],
             'filters' => [
                 'investors' => $investors,
