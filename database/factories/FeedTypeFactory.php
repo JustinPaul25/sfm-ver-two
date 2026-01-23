@@ -30,7 +30,7 @@ class FeedTypeFactory extends Factory
         ];
         
         return [
-            'feed_type' => fake()->randomElement($feedTypes) . ' ' . fake()->randomNumber(3),
+            'feed_type' => fake()->randomElement($feedTypes),
             'brand' => fake()->company(),
         ];
     }

@@ -23,7 +23,7 @@ class CageController extends Controller
     public function list(Request $request)
     {
         $user = $request->user();
-        $query = Cage::with(['investor', 'farmer']);
+        $query = Cage::with(['investor', 'farmer', 'feedType']);
 
         // Investors can only see their own cages
         if ($user && $user->isInvestor()) {
@@ -67,6 +67,7 @@ class CageController extends Controller
         $investorId = $request->get('investor_id');
         
         $query = Cage::query()
+            ->with(['investor', 'farmer', 'feedType'])
             ->whereHas('investor', function($q) {
                 $q->whereNull('deleted_at');
             });

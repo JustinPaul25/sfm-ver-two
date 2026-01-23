@@ -61,7 +61,9 @@ interface Cage {
   investor_id?: number;
   farmer_id?: number | null;
   feed_type?: {
-    name: string;
+    id: number;
+    feed_type: string;
+    brand: string;
   };
   investor?: {
     name: string;
@@ -517,7 +519,7 @@ onMounted(() => {
             </div>
             <div>
               <Label>Feed Type</Label>
-              <p class="text-lg">{{ cage.feed_type?.name }}</p>
+              <p class="text-lg">{{ cage.feed_type?.feed_type || 'N/A' }}</p>
             </div>
             <div>
               <Label>Investor</Label>

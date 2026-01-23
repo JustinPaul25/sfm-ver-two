@@ -27,6 +27,14 @@ interface Cage {
   feed_types_id: number;
   investor_id: number;
   farmer_id?: number | null;
+  feed_type?: {
+    id: number;
+    feed_type: string;
+    brand: string;
+  };
+  investor?: {
+    name: string;
+  };
   farmer?: {
     id: number;
     name: string;
@@ -359,10 +367,10 @@ onMounted(() => {
               <td class="px-6 py-4 whitespace-nowrap font-medium">{{ c?.id }}</td>
               <td class="px-6 py-4 whitespace-nowrap">{{ c?.number_of_fingerlings }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                {{ feedTypes.find(f => f.id === c?.feed_types_id)?.feed_type || c?.feed_types_id }}
+                {{ c?.feed_type?.feed_type || 'N/A' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                {{ investors.find(i => i.id === c?.investor_id)?.name || c?.investor_id }}
+                {{ c?.investor?.name || 'N/A' }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {{ c?.farmer?.name || '-' }}
