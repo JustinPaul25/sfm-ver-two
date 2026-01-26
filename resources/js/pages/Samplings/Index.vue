@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useSamplingStore } from '@/Stores/SamplingStore';
 import { useInvestorStore } from '@/Stores/InvestorStore';
@@ -16,6 +16,8 @@ import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
 import Swal from 'sweetalert2';
+import axios from 'axios';
+import { route } from 'ziggy-js';
 
 const page = usePage<SharedData>();
 const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
@@ -75,10 +77,8 @@ const deleteTargetId = ref<number|null>(null);
 const showEditDialog = ref(false);
 const editSampling = ref<Sampling | null>(null);
 const investors = computed(() => investorStore.investorsSelect as Investor[]);
-const cages = computed<Cage[]>(() => {
-  const data = cageStore.cages as any;
-  return data?.data || [];
-});
+const cages = ref<Cage[]>([]);
+const loadingCages = ref(false);
 
 const newSampling = ref<Pick<Sampling, 'investor_id' | 'date_sampling' | 'doc' | 'cage_no' | 'mortality'>>({
   investor_id: investors.value[0]?.id || 3,
@@ -136,15 +136,38 @@ function prevPage() {
   }
 }
 
+// Fetch cages for selected investor
+async function fetchCagesForInvestor(investorId: number | null) {
+  if (!investorId) {
+    cages.value = [];
+    return;
+  }
+  
+  loadingCages.value = true;
+  try {
+    const response = await axios.get(route('cages.select'), {
+      params: { investor_id: investorId }
+    });
+    cages.value = response.data || [];
+  } catch (error) {
+    console.error('Error fetching cages:', error);
+    cages.value = [];
+  } finally {
+    loadingCages.value = false;
+  }
+}
+
 function openCreateDialog() {
-  const defaultCageId = cages.value[0]?.id ?? 0;
+  const defaultInvestorId = investors.value[0]?.id || null;
   newSampling.value = {
-    investor_id: investors.value[0]?.id || 1,
+    investor_id: defaultInvestorId || 1,
     date_sampling: '',
     doc: '',
-    cage_no: defaultCageId,
+    cage_no: 0,
     mortality: 0,
   };
+  // Fetch cages for the selected investor
+  fetchCagesForInvestor(defaultInvestorId);
   showCreateDialog.value = true;
 }
 
@@ -182,6 +205,8 @@ function openEditDialog(s: Sampling) {
   editSampling.value = { 
     ...s,
   };
+  // Fetch cages for the selected investor
+  fetchCagesForInvestor(s.investor_id);
   showEditDialog.value = true;
 }
 
@@ -280,10 +305,25 @@ function formatTimestamp(timestamp: string | null | undefined): string {
   }
 }
 
+// Watch for investor changes in create dialog to refetch cages
+watch(() => newSampling.value.investor_id, (newInvestorId) => {
+  if (showCreateDialog.value && newInvestorId) {
+    fetchCagesForInvestor(newInvestorId);
+    // Reset cage selection when investor changes
+    newSampling.value.cage_no = 0;
+  }
+});
+
+// Watch for investor changes in edit dialog to refetch cages
+watch(() => editSampling.value?.investor_id, (newInvestorId) => {
+  if (showEditDialog.value && newInvestorId && editSampling.value) {
+    fetchCagesForInvestor(newInvestorId);
+  }
+});
+
 onMounted(() => {
   store.fetchSamplings();
   investorStore.fetchInvestorsSelect();
-  cageStore.fetchCages();
 });
 </script>
 
@@ -475,8 +515,11 @@ onMounted(() => {
               v-model.number="newSampling.cage_no"
               class="input w-full rounded border p-2"
               required
+              :disabled="loadingCages || cages.length === 0"
             >
-              <option value="" disabled>Select a cage</option>
+              <option value="" disabled>
+                {{ loadingCages ? 'Loading cages...' : (cages.length === 0 ? 'No cages available' : 'Select a cage') }}
+              </option>
               <option
                 v-for="cage in cages"
                 :key="cage.id"
@@ -486,6 +529,9 @@ onMounted(() => {
                 Cage #{{ cage.id }} — {{ cage.number_of_fingerlings }} fingerlings
               </option>
             </select>
+            <p v-if="cages.length === 0 && !loadingCages" class="text-xs text-gray-500 mt-1">
+              No cages available for the selected investor. Please select a different investor or ensure cages are assigned to you.
+            </p>
           </div>
           <div class="flex flex-col gap-2">
             <Label for="create-mortality">Mortality</Label>
@@ -543,8 +589,11 @@ onMounted(() => {
               v-model.number="editSampling.cage_no"
               class="input w-full rounded border p-2"
               required
+              :disabled="loadingCages || cages.length === 0"
             >
-              <option value="" disabled>Select a cage</option>
+              <option value="" disabled>
+                {{ loadingCages ? 'Loading cages...' : (cages.length === 0 ? 'No cages available' : 'Select a cage') }}
+              </option>
               <option
                 v-for="cage in cages"
                 :key="cage.id"
@@ -554,6 +603,9 @@ onMounted(() => {
                 Cage #{{ cage.id }} — {{ cage.number_of_fingerlings }} fingerlings
               </option>
             </select>
+            <p v-if="cages.length === 0 && !loadingCages" class="text-xs text-gray-500 mt-1">
+              No cages available for the selected investor. Please select a different investor or ensure cages are assigned to you.
+            </p>
           </div>
           <div class="flex flex-col gap-2">
             <Label for="edit-mortality">Mortality</Label>
