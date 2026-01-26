@@ -279,4 +279,72 @@ class UserController extends Controller
             ]
         ]);
     }
+
+    /**
+     * Link investor user to investor record (admin only).
+     * This fixes investor users that don't have investor_id set.
+     */
+    public function linkInvestor(Request $request, User $user)
+    {
+        if ($user->role !== 'investor') {
+            return response()->json([
+                'message' => 'User is not an investor'
+            ], 422);
+        }
+
+        $request->validate([
+            'investor_id' => 'required|exists:investors,id',
+        ]);
+
+        // Verify the investor name matches (optional check)
+        $investor = Investor::find($request->investor_id);
+        if ($investor && $investor->name !== $user->name) {
+            // Allow but warn
+            \Log::warning("Linking investor user {$user->name} (ID: {$user->id}) to investor {$investor->name} (ID: {$investor->id}) - names don't match");
+        }
+
+        $user->investor_id = $request->investor_id;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Investor user linked successfully',
+            'user' => $user->load('investor')
+        ]);
+    }
+
+    /**
+     * Auto-fix investor users missing investor_id (admin only).
+     * Attempts to match investor users to investor records by name.
+     */
+    public function fixInvestorLinks()
+    {
+        $investorUsers = User::where('role', 'investor')
+            ->whereNull('investor_id')
+            ->get();
+
+        $fixed = 0;
+        $notFound = [];
+
+        foreach ($investorUsers as $user) {
+            $investor = Investor::where('name', $user->name)->first();
+            if ($investor) {
+                $user->investor_id = $investor->id;
+                $user->save();
+                $fixed++;
+            } else {
+                $notFound[] = [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'user_email' => $user->email,
+                ];
+            }
+        }
+
+        return response()->json([
+            'message' => 'Investor link fix completed',
+            'fixed' => $fixed,
+            'not_found' => $notFound,
+            'total_checked' => $investorUsers->count()
+        ]);
+    }
 }

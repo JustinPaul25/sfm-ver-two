@@ -27,6 +27,29 @@ class CageController extends Controller
 
         // Investors can only see their own cages
         if ($user && $user->isInvestor()) {
+            // If investor_id is not set, try to find and link the investor
+            if (!$user->investor_id) {
+                $investor = \App\Models\Investor::where('name', $user->name)->first();
+                if ($investor) {
+                    $user->investor_id = $investor->id;
+                    $user->save();
+                } else {
+                    // If no matching investor found, return empty result with a helpful message
+                    return response()->json([
+                        'cages' => [
+                            'data' => [],
+                            'current_page' => 1,
+                            'last_page' => 1,
+                            'per_page' => 10,
+                            'total' => 0,
+                            'from' => null,
+                            'to' => null,
+                        ],
+                        'filters' => $request->only(['search', 'page']),
+                        'error' => 'Your investor account is not properly linked to an investor record. Please contact an administrator.'
+                    ]);
+                }
+            }
             $query->where('investor_id', $user->investor_id);
         }
 
@@ -74,7 +97,20 @@ class CageController extends Controller
         
         // Investors can only see their own cages
         if ($user && $user->isInvestor()) {
-            $query->where('investor_id', $user->investor_id);
+            // If investor_id is not set, try to find and link the investor
+            if (!$user->investor_id) {
+                $investor = \App\Models\Investor::where('name', $user->name)->first();
+                if ($investor) {
+                    $user->investor_id = $investor->id;
+                    $user->save();
+                }
+            }
+            if ($user->investor_id) {
+                $query->where('investor_id', $user->investor_id);
+            } else {
+                // Return empty result if investor_id still not set
+                return response()->json([]);
+            }
         }
         
         // Farmers can only see their own cages
@@ -232,10 +268,20 @@ class CageController extends Controller
         $user = $request->user();
         
         // Investors can only view their own cages
-        if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
-            return response()->json([
-                'message' => 'You can only view your own cages'
-            ], 403);
+        if ($user && $user->isInvestor()) {
+            // If investor_id is not set, try to find and link the investor
+            if (!$user->investor_id) {
+                $investor = \App\Models\Investor::where('name', $user->name)->first();
+                if ($investor) {
+                    $user->investor_id = $investor->id;
+                    $user->save();
+                }
+            }
+            if ($cage->investor_id !== $user->investor_id) {
+                return response()->json([
+                    'message' => 'You can only view your own cages'
+                ], 403);
+            }
         }
         
         // Farmers can only view their own cages
@@ -267,10 +313,20 @@ class CageController extends Controller
         $user = $request->user();
         
         // Investors can only view their own cages
-        if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
-            return response()->json([
-                'message' => 'You can only view your own cages'
-            ], 403);
+        if ($user && $user->isInvestor()) {
+            // If investor_id is not set, try to find and link the investor
+            if (!$user->investor_id) {
+                $investor = \App\Models\Investor::where('name', $user->name)->first();
+                if ($investor) {
+                    $user->investor_id = $investor->id;
+                    $user->save();
+                }
+            }
+            if ($cage->investor_id !== $user->investor_id) {
+                return response()->json([
+                    'message' => 'You can only view your own cages'
+                ], 403);
+            }
         }
         
         // Farmers can only view their own cages
@@ -374,7 +430,22 @@ class CageController extends Controller
         
         // Investors can only see their own cages
         if ($user && $user->isInvestor()) {
-            $query->where('investor_id', $user->investor_id);
+            // If investor_id is not set, try to find and link the investor
+            if (!$user->investor_id) {
+                $investor = \App\Models\Investor::where('name', $user->name)->first();
+                if ($investor) {
+                    $user->investor_id = $investor->id;
+                    $user->save();
+                }
+            }
+            if ($user->investor_id) {
+                $query->where('investor_id', $user->investor_id);
+            } else {
+                // Return empty result if investor_id still not set
+                return response()->json([
+                    'verification_data' => []
+                ]);
+            }
         }
         
         // Farmers can only see their own cages

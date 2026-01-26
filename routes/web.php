@@ -107,6 +107,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::put('users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');
     Route::post('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+    Route::post('users/{user}/link-investor', [UserController::class, 'linkInvestor'])->name('users.link-investor');
+    Route::post('users/fix-investor-links', [UserController::class, 'fixInvestorLinks'])->name('users.fix-investor-links');
 
     // SystemSettingsController (admin only)
     Route::get('settings/system', [SystemSettingsController::class, 'index'])->name('settings.system');
