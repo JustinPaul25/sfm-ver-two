@@ -341,7 +341,7 @@ onMounted(() => {
           <Link :href="route('cages.verification')">
             <Button variant="outline">Per Cage Verification</Button>
           </Link>
-          <Button v-if="!isInvestor" @click="openCreateDialog" variant="secondary">Create Cage</Button>
+          <Button v-if="isAdmin" @click="openCreateDialog" variant="secondary">Create Cage</Button>
         </div>
       </div>
       <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 dark:border-sidebar-border bg-white dark:bg-gray-900">

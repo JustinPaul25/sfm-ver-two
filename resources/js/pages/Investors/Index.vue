@@ -13,7 +13,7 @@ import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
 import Swal from 'sweetalert2';
 import { router } from '@inertiajs/vue3';
-import { BarChart3 } from 'lucide-vue-next';
+import { BarChart3, Eye } from 'lucide-vue-next';
 
 // Define Investor type
 interface Investor {
@@ -134,6 +134,10 @@ function openEditDialog(inv: Investor) {
   showEditDialog.value = true;
 }
 
+function viewDetails(investorId: number) {
+  router.visit(`/investors/${investorId}`);
+}
+
 function viewReport(investorId: number) {
   router.visit(`/investors/${investorId}/report`);
 }
@@ -195,6 +199,15 @@ onMounted(() => {
               <td class="px-6 py-4 whitespace-nowrap">{{ inv.phone }}</td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex gap-1">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    @click="viewDetails(inv.id)"
+                    title="View details & cages"
+                    class="w-8 h-8 p-0"
+                  >
+                    <Eye :size="16" />
+                  </Button>
                   <Button 
                     variant="default" 
                     size="sm" 

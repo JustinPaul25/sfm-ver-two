@@ -28,6 +28,7 @@ Route::middleware(['auth'])->group(function () {
     Route::put('investors/{investor}', [InvestorController::class, 'update'])->name('investors.update');
     Route::delete('investors/{investor}', [InvestorController::class, 'destroy'])->name('investors.destroy');
     Route::get('investors/select', [InvestorController::class, 'select'])->name('investors.select');
+    Route::get('investors/{investor}', [InvestorController::class, 'show'])->name('investors.show');
     Route::get('investors/{investor}/report', [InvestorController::class, 'report'])->name('investors.report');
 
     // SamplingController

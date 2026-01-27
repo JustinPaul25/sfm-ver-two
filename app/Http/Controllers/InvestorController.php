@@ -17,6 +17,37 @@ class InvestorController extends Controller
         return Inertia::render('Investors/Index');
     }
 
+    public function show(Request $request, Investor $investor)
+    {
+        $user = $request->user();
+
+        // Investors can only view their own details
+        if ($user && $user->isInvestor() && $investor->id !== $user->investor_id) {
+            abort(403, 'You can only view your own investor details.');
+        }
+
+        $investor->load(['cages' => function ($q) {
+            $q->with(['farmer', 'feedType']);
+        }]);
+
+        return Inertia::render('Investors/Show', [
+            'investor' => [
+                'id' => $investor->id,
+                'name' => $investor->name,
+                'address' => $investor->address,
+                'phone' => $investor->phone,
+            ],
+            'cages' => $investor->cages->map(function ($cage) {
+                return [
+                    'id' => $cage->id,
+                    'number_of_fingerlings' => $cage->number_of_fingerlings,
+                    'feed_type' => $cage->feedType ? $cage->feedType->feed_type : null,
+                    'farmer' => $cage->farmer ? ['id' => $cage->farmer->id, 'name' => $cage->farmer->name] : null,
+                ];
+            }),
+        ]);
+    }
+
     public function select(Request $request)
     {
         $user = $request->user();

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\User;
+use App\Models\Investor;
 use Illuminate\Support\Facades\Hash;
 
 class UserSeeder extends Seeder
@@ -22,6 +23,25 @@ class UserSeeder extends Seeder
             'password' => Hash::make('admin123'),
             'role' => 'admin',
             'is_active' => true,
+        ]);
+
+        // Create investor user (requires Investor record; InvestorSeeder adds more)
+        $demoInvestor = Investor::firstOrCreate(
+            ['name' => 'Demo Investor'],
+            [
+                'phone' => '09112233445',
+                'address' => 'Demo Address, Philippines',
+            ]
+        );
+        User::firstOrCreate([
+            'email' => 'investor@sfm.com',
+        ], [
+            'name' => $demoInvestor->name,
+            'email_verified_at' => now(),
+            'password' => Hash::make('investor123'),
+            'role' => 'investor',
+            'is_active' => true,
+            'investor_id' => $demoInvestor->id,
         ]);
 
         // Create test user
@@ -113,6 +133,7 @@ class UserSeeder extends Seeder
         $this->command->info('');
         $this->command->info('=== Default Login Credentials ===');
         $this->command->info('Admin: admin@sfm.com / admin123');
+        $this->command->info('Investor: investor@sfm.com / investor123');
         $this->command->info('Test: test@sfm.com / password');
         $this->command->info('Manager: manager@sfm.com / manager123');
         $this->command->info('');
@@ -121,8 +142,10 @@ class UserSeeder extends Seeder
         $this->command->info("  - Active: {$activeUsers}");
         $this->command->info("  - Inactive: {$inactiveUsersCount}");
         $this->command->info('');
+        $investorUsers = User::where('role', 'investor')->count();
         $this->command->info("Roles Distribution:");
         $this->command->info("  - Admins: {$adminUsers}");
+        $this->command->info("  - Investors: {$investorUsers}");
         $this->command->info("  - Farmers: {$farmerUsers}");
     }
 }

@@ -97,32 +97,31 @@ class InvestorSeeder extends Seeder
             $archived->delete();
         }
 
-        // Create investor user accounts so they can log in
-        $investorUserData = [
-            ['investor_name' => 'John Smith', 'email' => 'john.smith@investor.com', 'password' => 'password'],
-            ['investor_name' => 'Maria Garcia', 'email' => 'maria.garcia@investor.com', 'password' => 'password'],
-            ['investor_name' => 'Robert Johnson', 'email' => 'robert.johnson@investor.com', 'password' => 'password'],
-            ['investor_name' => 'Ana Santos', 'email' => 'ana.santos@investor.com', 'password' => 'password'],
-            ['investor_name' => 'Carlos Rodriguez', 'email' => 'carlos.rodriguez@investor.com', 'password' => 'password'],
-        ];
-
+        // Create a login account for every non-archived investor (skip if one already exists)
+        $allInvestors = Investor::whereNull('deleted_at')->orderBy('id')->get();
         $createdInvestorUsers = 0;
-        foreach ($investorUserData as $investorUser) {
-            $investor = Investor::where('name', $investorUser['investor_name'])->first();
-            
-            if ($investor) {
-                User::firstOrCreate([
-                    'email' => $investorUser['email'],
-                ], [
-                    'name' => $investorUser['investor_name'],
+        $investorCredentials = [];
+
+        foreach ($allInvestors as $investor) {
+            $existing = User::where('investor_id', $investor->id)->where('role', 'investor')->first();
+            if ($existing) {
+                $investorCredentials[] = "{$existing->email} / password";
+                continue;
+            }
+            $email = strtolower(str_replace(' ', '.', $investor->name)) . '@investor.com';
+            User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $investor->name,
                     'email_verified_at' => now(),
-                    'password' => Hash::make($investorUser['password']),
+                    'password' => Hash::make('password'),
                     'role' => 'investor',
                     'is_active' => true,
                     'investor_id' => $investor->id,
-                ]);
-                $createdInvestorUsers++;
-            }
+                ]
+            );
+            $createdInvestorUsers++;
+            $investorCredentials[] = "{$email} / password";
         }
 
         // Create farmer users and link them to investors
@@ -285,14 +284,12 @@ class InvestorSeeder extends Seeder
 
         $this->command->info('Investors seeded successfully!');
         $this->command->info('Created ' . count($investors) . ' specific investors and ' . count($additionalInvestors) . ' additional investors, plus 1 archived investor.');
-        $this->command->info('Created ' . $createdInvestorUsers . ' investor user accounts for login.');
+        $this->command->info('Created ' . $createdInvestorUsers . ' new investor login accounts (all ' . $allInvestors->count() . ' non-archived investors have logins).');
         $this->command->info('Created ' . $createdFarmers . ' farmers linked to investors.');
         $this->command->info('');
-        $this->command->info('=== Investor Login Credentials ===');
-        $this->command->info('john.smith@investor.com / password');
-        $this->command->info('maria.garcia@investor.com / password');
-        $this->command->info('robert.johnson@investor.com / password');
-        $this->command->info('ana.santos@investor.com / password');
-        $this->command->info('carlos.rodriguez@investor.com / password');
+        $this->command->info('=== Investor Login Credentials (all use password: password) ===');
+        foreach ($investorCredentials as $cred) {
+            $this->command->info($cred);
+        }
     }
 }

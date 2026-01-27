@@ -130,11 +130,11 @@ class CageController extends Controller
     public function store(Request $request)
     {
         $user = $request->user();
-        
-        // Investors cannot create cages
-        if ($user && $user->isInvestor()) {
+
+        // Only admins can create cages for investors
+        if (!$user || !$user->isAdmin()) {
             return response()->json([
-                'message' => 'Investors cannot create cages'
+                'message' => 'Only administrators can create cages for investors.'
             ], 403);
         }
 
@@ -146,12 +146,6 @@ class CageController extends Controller
         ]);
 
         $data = $request->all();
-        
-        // Only admin can assign farmers to cages
-        // Farmers creating cages are automatically assigned to their own cages
-        if ($user && $user->isFarmer()) {
-            $data['farmer_id'] = $user->id;
-        }
 
         // Validate that farmer belongs to the same investor
         if (isset($data['farmer_id'])) {
