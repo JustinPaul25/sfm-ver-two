@@ -9,6 +9,8 @@ use App\Models\Sample;
 use App\Models\Investor;
 use App\Models\Cage;
 use App\Models\FeedType;
+use App\Models\CageFeedConsumption;
+use App\Services\HarvestEstimationService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -144,6 +146,38 @@ class DashboardController extends Controller
             SUM(weight) as total_weight
         ')->first();
 
+        // Feed consumption analytics
+        $feedConsumptionQuery = CageFeedConsumption::whereBetween('consumption_date', [$startDate, $endDate])
+            ->whereHas('cage', function($q) use ($user, $investorId, $cageNo) {
+                $q->whereHas('investor', function($investorQ) {
+                    $investorQ->whereNull('deleted_at');
+                });
+                
+                if ($user && $user->isInvestor()) {
+                    $q->where('investor_id', $user->investor_id);
+                }
+                
+                if ($user && $user->isFarmer()) {
+                    $q->where('farmer_id', $user->id);
+                }
+                
+                if ($investorId) {
+                    $q->where('investor_id', $investorId);
+                }
+                
+                if ($cageNo) {
+                    $q->where('id', $cageNo);
+                }
+            });
+        
+        $feedConsumptionStats = $feedConsumptionQuery->selectRaw('
+            COUNT(*) as total_records,
+            SUM(feed_amount) as total_feed_consumed,
+            AVG(feed_amount) as avg_feed_amount,
+            MIN(feed_amount) as min_feed_amount,
+            MAX(feed_amount) as max_feed_amount
+        ')->first();
+
         // Top performing investors
         $topInvestorsQuery = Investor::withCount(['samplings' => function($query) use ($startDate, $endDate) {
             $query->whereBetween('date_sampling', [$startDate, $endDate]);
@@ -237,6 +271,24 @@ class DashboardController extends Controller
         // Growth metrics
         $growthMetrics = $this->calculateGrowthMetrics($startDate, $endDate, $investorId, $cageNo, $user);
 
+        // Harvest anticipation: cages with estimated harvest date (same scope as dashboard)
+        $harvestCagesQuery = Cage::with('investor')
+            ->whereHas('investor', fn ($q) => $q->whereNull('deleted_at'));
+        if ($user && $user->isInvestor()) {
+            $harvestCagesQuery->where('investor_id', $user->investor_id);
+        }
+        if ($user && $user->isFarmer()) {
+            $harvestCagesQuery->where('farmer_id', $user->id);
+        }
+        if ($investorId) {
+            $harvestCagesQuery->where('investor_id', $investorId);
+        }
+        if ($cageNo) {
+            $harvestCagesQuery->where('id', $cageNo);
+        }
+        $harvestService = new HarvestEstimationService();
+        $cageHarvestAnticipations = $harvestService->anticipateForCages($harvestCagesQuery->get());
+
         return [
             'analytics' => [
                 'summary' => [
@@ -255,11 +307,19 @@ class DashboardController extends Controller
                     'max_weight' => $weightStats->max_weight ?? 0,
                     'total_weight' => $weightStats->total_weight ?? 0,
                 ],
+                'feed_consumption_stats' => [
+                    'total_records' => $feedConsumptionStats->total_records ?? 0,
+                    'total_feed_consumed' => round($feedConsumptionStats->total_feed_consumed ?? 0, 2),
+                    'avg_feed_amount' => round($feedConsumptionStats->avg_feed_amount ?? 0, 2),
+                    'min_feed_amount' => round($feedConsumptionStats->min_feed_amount ?? 0, 2),
+                    'max_feed_amount' => round($feedConsumptionStats->max_feed_amount ?? 0, 2),
+                ],
                 'top_investors' => $topInvestors,
                 'sampling_trends' => $samplingTrends,
                 'feed_type_usage' => $feedTypeUsage,
                 'cage_performance' => $cagePerformance,
                 'growth_metrics' => $growthMetrics,
+                'cage_harvest_anticipations' => array_slice($cageHarvestAnticipations, 0, 10),
                 'date_range' => [
                     'start' => $startDate->format('Y-m-d'),
                     'end' => $endDate->format('Y-m-d'),

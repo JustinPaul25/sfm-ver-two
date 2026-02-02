@@ -7,6 +7,7 @@ use Inertia\Inertia;
 use App\Models\Cage;
 use App\Models\CageFeedConsumption;
 use App\Models\Sampling;
+use App\Services\HarvestEstimationService;
 
 class CageController extends Controller
 {
@@ -286,6 +287,8 @@ class CageController extends Controller
         }
         
         $cage->load(['feedType', 'investor', 'feedingSchedule']);
+
+        $harvestEstimation = (new HarvestEstimationService())->estimateForCage($cage);
         
         // Paginate feed consumptions - order by latest date first
         $perPage = $request->get('per_page', 10);
@@ -298,7 +301,8 @@ class CageController extends Controller
         return Inertia::render('Cages/View', [
             'cage' => $cage,
             'feedConsumptions' => $feedConsumptions,
-            'feedingSchedule' => $cage->feedingSchedule
+            'feedingSchedule' => $cage->feedingSchedule,
+            'harvestAnticipation' => $harvestEstimation,
         ]);
     }
 

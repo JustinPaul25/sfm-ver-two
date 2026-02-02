@@ -50,4 +50,30 @@ class SystemSettingsController extends Controller
             'algorithm' => $algorithm,
         ]);
     }
+
+    /**
+     * Update harvest anticipation settings.
+     */
+    public function updateHarvestSettings(Request $request)
+    {
+        $request->validate([
+            'harvest_target_weight_grams' => 'required|numeric|min:1|max:10000',
+            'harvest_default_growth_rate_g_per_day' => 'required|numeric|min:0.1|max:100',
+        ]);
+
+        SystemSetting::set(
+            'harvest_target_weight_grams',
+            (string) $request->harvest_target_weight_grams,
+            'float',
+            'Target harvest weight in grams'
+        );
+        SystemSetting::set(
+            'harvest_default_growth_rate_g_per_day',
+            (string) $request->harvest_default_growth_rate_g_per_day,
+            'float',
+            'Default daily growth rate (g/day) when only one sampling exists'
+        );
+
+        return back()->with('success', 'Harvest settings updated successfully.');
+    }
 }

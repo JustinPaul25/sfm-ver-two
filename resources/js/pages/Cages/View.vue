@@ -22,11 +22,23 @@ import Swal from 'sweetalert2';
 
 const page = usePage<SharedData>();
 const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
+const isInvestor = computed(() => userRole.value === 'investor');
 const isAdmin = computed(() => userRole.value === 'admin');
 
 const store = useCageStore();
 const feedTypeStore = useFeedTypeStore();
 const investorStore = useInvestorStore();
+
+// Harvest anticipation from backend
+interface HarvestAnticipation {
+  estimated_harvest_date: string | null;
+  days_until_harvest: number | null;
+  current_avg_weight_g: number;
+  target_weight_g: number;
+  growth_rate_used_g_per_day: number;
+  is_ready: boolean;
+  latest_sampling_date: string | null;
+}
 
 // Get cage data from Inertia props
 const props = defineProps<{
@@ -41,6 +53,7 @@ const props = defineProps<{
     to: number;
   };
   feedingSchedule?: FeedingSchedule | null;
+  harvestAnticipation?: HarvestAnticipation | null;
   errors?: any;
   flash?: any;
 }>();
@@ -408,6 +421,10 @@ const resetNewConsumption = () => {
 
 // Edit cage functions
 const openEditCageDialog = () => {
+  // Prevent investors from editing cages
+  if (isInvestor.value) {
+    return;
+  }
   editCage.value = { ...cage.value };
   if (editCage.value.investor_id) {
     fetchFarmersForEdit(editCage.value.investor_id);
@@ -499,7 +516,7 @@ onMounted(() => {
       <div class="flex items-center justify-between">
         <h1 class="text-3xl font-bold">Cage #{{ cageId }}</h1>
         <div class="flex gap-2">
-          <Button @click="openEditCageDialog">Edit Cage</Button>
+          <Button v-if="!isInvestor" @click="openEditCageDialog">Edit Cage</Button>
           <Link href="/cages">
             <Button variant="secondary">Back to Cages</Button>
           </Link>
@@ -526,6 +543,45 @@ onMounted(() => {
               <p class="text-lg">{{ cage.investor?.name }}</p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <!-- Harvest Anticipation -->
+      <Card v-if="harvestAnticipation && harvestAnticipation.latest_sampling_date">
+        <CardHeader>
+          <CardTitle>Harvest Anticipation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="p-4 rounded-lg" :class="harvestAnticipation.is_ready ? 'bg-green-50 dark:bg-green-900/20' : 'bg-amber-50 dark:bg-amber-900/20'">
+              <p class="text-sm text-muted-foreground">Status</p>
+              <p class="text-lg font-semibold" :class="harvestAnticipation.is_ready ? 'text-green-600' : 'text-amber-600'">
+                {{ harvestAnticipation.is_ready ? 'Ready for harvest' : harvestAnticipation.days_until_harvest + ' days to harvest' }}
+              </p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <p class="text-sm text-muted-foreground">Current avg. weight</p>
+              <p class="text-lg font-semibold">{{ harvestAnticipation.current_avg_weight_g }}g</p>
+              <p class="text-xs text-muted-foreground">from latest sampling ({{ formatDate(harvestAnticipation.latest_sampling_date) }})</p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <p class="text-sm text-muted-foreground">Target harvest weight</p>
+              <p class="text-lg font-semibold">{{ harvestAnticipation.target_weight_g }}g</p>
+            </div>
+            <div class="p-4 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <p class="text-sm text-muted-foreground">Estimated harvest date</p>
+              <p class="text-lg font-semibold">{{ harvestAnticipation.estimated_harvest_date ? formatDate(harvestAnticipation.estimated_harvest_date) : '–' }}</p>
+              <p v-if="!harvestAnticipation.is_ready && harvestAnticipation.growth_rate_used_g_per_day" class="text-xs text-muted-foreground">~{{ harvestAnticipation.growth_rate_used_g_per_day }}g/day growth</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card v-else-if="harvestAnticipation">
+        <CardHeader>
+          <CardTitle>Harvest Anticipation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-muted-foreground">No sampling data for this cage yet. Add a sampling with samples to see estimated harvest date.</p>
         </CardContent>
       </Card>
 

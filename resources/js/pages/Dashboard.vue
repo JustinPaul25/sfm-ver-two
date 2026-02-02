@@ -7,7 +7,7 @@ import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import SamplingTrendsChart from '@/components/charts/SamplingTrendsChart.vue';
-import { router } from '@inertiajs/vue3';
+import { router, Link } from '@inertiajs/vue3';
 import axios from 'axios';
 
 // Props from Inertia
@@ -499,6 +499,52 @@ onUnmounted(() => {
                     </div>
                 </Card>
             </div>
+
+            <!-- Harvest Anticipation -->
+            <Card class="p-6">
+                <h3 class="text-lg font-semibold mb-4">Harvest Anticipation</h3>
+                <p class="text-sm text-muted-foreground mb-4">Estimated when fish in each cage will reach target harvest weight (from latest sampling).</p>
+                <div class="space-y-3">
+                    <div
+                        v-for="row in (analytics.cage_harvest_anticipations || [])"
+                        :key="row.cage_id"
+                        class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div
+                                class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                                :class="row.is_ready ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'"
+                            >
+                                {{ row.is_ready ? '✓' : row.days_until_harvest }}
+                            </div>
+                            <div>
+                                <Link
+                                    :href="route('cages.view', row.cage_id)"
+                                    class="font-medium text-primary hover:underline"
+                                >
+                                    Cage {{ row.cage_id }}
+                                </Link>
+                                <p class="text-sm text-muted-foreground">
+                                    {{ row.cage?.investor?.name }} · {{ row.cage?.number_of_fingerlings }} fingerlings
+                                </p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p v-if="row.is_ready" class="font-medium text-green-600">Ready for harvest</p>
+                            <p v-else class="font-medium">{{ row.days_until_harvest }} days</p>
+                            <p class="text-sm text-muted-foreground">
+                                {{ formatWeight(row.current_avg_weight_g) }} → {{ formatWeight(row.target_weight_g) }}g target
+                            </p>
+                            <p v-if="row.estimated_harvest_date" class="text-xs text-muted-foreground mt-0.5">
+                                ~{{ new Date(row.estimated_harvest_date).toLocaleDateString() }}
+                            </p>
+                        </div>
+                    </div>
+                    <div v-if="!analytics.cage_harvest_anticipations?.length" class="text-center py-8 text-muted-foreground">
+                        No cage sampling data yet. Add samplings with samples to see harvest estimates.
+                    </div>
+                </div>
+            </Card>
 
             <!-- Growth Metrics -->
             <Card class="p-6">

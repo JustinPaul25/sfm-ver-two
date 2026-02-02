@@ -33,5 +33,6 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Suppress PHP 8.5 PDO deprecation warnings from Laravel vendor files
+        error_reporting(error_reporting() & ~E_DEPRECATED);
     })->create();

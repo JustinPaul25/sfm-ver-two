@@ -60,6 +60,21 @@ class User extends Authenticatable
     }
 
     /**
+     * Get all feed consumptions across all cages managed by this farmer.
+     */
+    public function feedConsumptions()
+    {
+        return $this->hasManyThrough(
+            CageFeedConsumption::class,
+            Cage::class,
+            'farmer_id', // Foreign key on cages table
+            'cage_id',   // Foreign key on cage_feed_consumptions table
+            'id',        // Local key on users table
+            'id'         // Local key on cages table
+        );
+    }
+
+    /**
      * Get the investor that this farmer belongs to.
      */
     public function investor()
@@ -89,5 +104,71 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * Get total feed consumption for this farmer across all cages.
+     *
+     * @param \Carbon\Carbon|null $startDate
+     * @param \Carbon\Carbon|null $endDate
+     * @return float
+     */
+    public function getTotalFeedConsumption($startDate = null, $endDate = null): float
+    {
+        $query = $this->feedConsumptions();
+        
+        if ($startDate) {
+            $query->where('consumption_date', '>=', $startDate);
+        }
+        
+        if ($endDate) {
+            $query->where('consumption_date', '<=', $endDate);
+        }
+        
+        return (float) $query->sum('feed_amount');
+    }
+
+    /**
+     * Get average daily feed consumption for this farmer.
+     *
+     * @param \Carbon\Carbon|null $startDate
+     * @param \Carbon\Carbon|null $endDate
+     * @return float
+     */
+    public function getAverageFeedConsumption($startDate = null, $endDate = null): float
+    {
+        $query = $this->feedConsumptions();
+        
+        if ($startDate) {
+            $query->where('consumption_date', '>=', $startDate);
+        }
+        
+        if ($endDate) {
+            $query->where('consumption_date', '<=', $endDate);
+        }
+        
+        return (float) $query->avg('feed_amount') ?? 0.0;
+    }
+
+    /**
+     * Get feed consumption count for this farmer.
+     *
+     * @param \Carbon\Carbon|null $startDate
+     * @param \Carbon\Carbon|null $endDate
+     * @return int
+     */
+    public function getFeedConsumptionCount($startDate = null, $endDate = null): int
+    {
+        $query = $this->feedConsumptions();
+        
+        if ($startDate) {
+            $query->where('consumption_date', '>=', $startDate);
+        }
+        
+        if ($endDate) {
+            $query->where('consumption_date', '<=', $endDate);
+        }
+        
+        return $query->count();
     }
 }
