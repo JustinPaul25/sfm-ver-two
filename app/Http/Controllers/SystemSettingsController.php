@@ -21,26 +21,7 @@ class SystemSettingsController extends Controller
     }
 
     /**
-     * Update the forecasting algorithm setting.
-     */
-    public function updateForecastingAlgorithm(Request $request)
-    {
-        $request->validate([
-            'algorithm' => 'required|in:lstm,rnn,dense',
-        ]);
-
-        SystemSetting::set(
-            'forecasting_algorithm',
-            $request->algorithm,
-            'string',
-            'Algorithm used for forecasting: lstm, rnn, or dense'
-        );
-
-        return back()->with('success', 'Forecasting algorithm updated successfully.');
-    }
-
-    /**
-     * Get the current forecasting algorithm.
+     * Get the current forecasting algorithm (LSTM is used as default for best accuracy).
      */
     public function getForecastingAlgorithm()
     {

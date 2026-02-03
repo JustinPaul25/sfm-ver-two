@@ -113,7 +113,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // SystemSettingsController (admin only)
     Route::get('settings/system', [SystemSettingsController::class, 'index'])->name('settings.system');
-    Route::put('settings/system/forecasting-algorithm', [SystemSettingsController::class, 'updateForecastingAlgorithm'])->name('settings.system.forecasting-algorithm');
     Route::put('settings/system/harvest-settings', [SystemSettingsController::class, 'updateHarvestSettings'])->name('settings.system.harvest-settings');
 });
 
