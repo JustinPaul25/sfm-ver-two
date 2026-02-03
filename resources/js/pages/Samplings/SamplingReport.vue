@@ -104,6 +104,7 @@ const organizedSamples = computed(() => {
   const sortedSamples = [...samples].sort((a, b) => (a.sample_no || 0) - (b.sample_no || 0));
   
   return sortedSamples.map(sample => ({
+    id: sample.id,
     no: sample.sample_no || '',
     weight: roundToTenth(sample.weight),
     length: sample.length ? roundToTenth(sample.length) : null,
@@ -206,6 +207,7 @@ const exportToExcel = () => {
 
 const showDeleteDialog = ref(false);
 const isDeleting = ref(false);
+const deletingSampleId = ref<number | null>(null);
 
 const deleteSamplingReport = async () => {
   const samplingId = props.sampling?.id;
@@ -231,6 +233,51 @@ const deleteSamplingReport = async () => {
     alert(error.response?.data?.message || 'Failed to delete sampling report');
     isDeleting.value = false;
     showDeleteDialog.value = false;
+  }
+};
+
+const deleteSample = async (sampleId: number) => {
+  if (!sampleId) {
+    alert('Invalid sample ID');
+    return;
+  }
+
+  if (!confirm('Are you sure you want to delete this sample? This action cannot be undone.')) {
+    return;
+  }
+
+  deletingSampleId.value = sampleId;
+  
+  try {
+    await axios.delete(route('samples.destroy', sampleId));
+    
+    // Remove the sample from the local data
+    const sampleIndex = report.value.samples.findIndex((s: any) => s.id === sampleId);
+    if (sampleIndex !== -1) {
+      report.value.samples.splice(sampleIndex, 1);
+    }
+    
+    // Recalculate totals
+    const samples = report.value.samples;
+    const totalWeight = samples.reduce((sum: number, s: any) => sum + (s.weight || 0), 0);
+    const totalSamples = samples.length;
+    const avgWeight = totalSamples > 0 ? totalWeight / totalSamples : 0;
+    
+    // Update totals
+    report.value.totals.totalWeight = totalWeight;
+    report.value.totals.totalSamples = totalSamples;
+    report.value.totals.avgWeight = avgWeight;
+    
+    // Recalculate biomass
+    const presentStocks = report.value.totals.presentStocks;
+    report.value.totals.biomass = Math.round((avgWeight * presentStocks) / 1000 * 100) / 100;
+    
+    deletingSampleId.value = null;
+    console.log('Sample deleted successfully');
+  } catch (error: any) {
+    console.error('Error deleting sample:', error);
+    alert(error.response?.data?.message || 'Failed to delete sample');
+    deletingSampleId.value = null;
   }
 };
 
@@ -426,16 +473,28 @@ const aiAverages = computed(() => {
                 <th class="px-4 py-2 text-left">Width (cm)</th>
                 <th class="px-4 py-2 text-left">Type</th>
                 <th class="px-4 py-2 text-left">Tested At</th>
+                <th class="px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in organizedSamples" :key="row.no" class="border-b border-gray-200 dark:border-gray-700">
+              <tr v-for="row in organizedSamples" :key="row.id" class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
                 <td class="px-4 py-2">{{ row.no }}</td>
                 <td class="px-4 py-2">{{ row.weight ? row.weight.toFixed(1) : '' }}</td>
                 <td class="px-4 py-2">{{ row.length ? row.length.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.width ? row.width.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.type }}</td>
                 <td class="px-4 py-2">{{ row.testedAt || '-' }}</td>
+                <td class="px-4 py-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    @click="deleteSample(row.id)"
+                    :disabled="deletingSampleId === row.id"
+                    class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+                  >
+                    {{ deletingSampleId === row.id ? '...' : '🗑️' }}
+                  </Button>
+                </td>
               </tr>
             </tbody>
           </table>

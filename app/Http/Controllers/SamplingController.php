@@ -207,6 +207,42 @@ class SamplingController extends Controller
         ]);
     }
 
+    public function destroySample(Request $request, Sample $sample)
+    {
+        $user = $request->user();
+        
+        // Investors cannot delete samples
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot delete samples'
+            ], 403);
+        }
+
+        // Get the sampling to check cage ownership for farmers
+        $sampling = $sample->sampling;
+        if (!$sampling) {
+            return response()->json([
+                'message' => 'Sample not found or has no associated sampling'
+            ], 404);
+        }
+
+        // Farmers can only delete samples for their own cages
+        if ($user && $user->isFarmer()) {
+            $cage = $sampling->cage;
+            if (!$cage || $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only delete samples for your own cages'
+                ], 403);
+            }
+        }
+
+        $sample->delete();
+
+        return response()->json([
+            'message' => 'Sample deleted successfully'
+        ]);
+    }
+
     /**
      * Generate a unique DOC string for a sampling.
      * Format: DOC-YYYYMMDD-XXXXX
