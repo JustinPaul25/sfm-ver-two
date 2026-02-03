@@ -5,7 +5,6 @@ import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
-import { router } from '@inertiajs/vue3';
 import FishDetectionCamera from '@/components/FishDetectionCamera.vue';
 import Dialog from '@/components/ui/dialog/Dialog.vue';
 import DialogContent from '@/components/ui/dialog/DialogContent.vue';
@@ -104,7 +103,6 @@ const organizedSamples = computed(() => {
   const sortedSamples = [...samples].sort((a, b) => (a.sample_no || 0) - (b.sample_no || 0));
   
   return sortedSamples.map(sample => ({
-    id: sample.id,
     no: sample.sample_no || '',
     weight: roundToTenth(sample.weight),
     length: sample.length ? roundToTenth(sample.length) : null,
@@ -205,82 +203,6 @@ const exportToExcel = () => {
   }
 };
 
-const showDeleteDialog = ref(false);
-const isDeleting = ref(false);
-const deletingSampleId = ref<number | null>(null);
-
-const deleteSamplingReport = async () => {
-  const samplingId = props.sampling?.id;
-  if (!samplingId) {
-    alert('No sampling report to delete');
-    return;
-  }
-
-  isDeleting.value = true;
-  
-  try {
-    await axios.delete(route('samplings.destroy', samplingId));
-    
-    // Redirect to samplings list after successful deletion
-    router.visit(route('samplings.index'), {
-      onSuccess: () => {
-        // You can show a success message here if you have a toast notification system
-        console.log('Sampling report deleted successfully');
-      }
-    });
-  } catch (error: any) {
-    console.error('Error deleting sampling:', error);
-    alert(error.response?.data?.message || 'Failed to delete sampling report');
-    isDeleting.value = false;
-    showDeleteDialog.value = false;
-  }
-};
-
-const deleteSample = async (sampleId: number) => {
-  if (!sampleId) {
-    alert('Invalid sample ID');
-    return;
-  }
-
-  if (!confirm('Are you sure you want to delete this sample? This action cannot be undone.')) {
-    return;
-  }
-
-  deletingSampleId.value = sampleId;
-  
-  try {
-    await axios.delete(route('samples.destroy', sampleId));
-    
-    // Remove the sample from the local data
-    const sampleIndex = report.value.samples.findIndex((s: any) => s.id === sampleId);
-    if (sampleIndex !== -1) {
-      report.value.samples.splice(sampleIndex, 1);
-    }
-    
-    // Recalculate totals
-    const samples = report.value.samples;
-    const totalWeight = samples.reduce((sum: number, s: any) => sum + (s.weight || 0), 0);
-    const totalSamples = samples.length;
-    const avgWeight = totalSamples > 0 ? totalWeight / totalSamples : 0;
-    
-    // Update totals
-    report.value.totals.totalWeight = totalWeight;
-    report.value.totals.totalSamples = totalSamples;
-    report.value.totals.avgWeight = avgWeight;
-    
-    // Recalculate biomass
-    const presentStocks = report.value.totals.presentStocks;
-    report.value.totals.biomass = Math.round((avgWeight * presentStocks) / 1000 * 100) / 100;
-    
-    deletingSampleId.value = null;
-    console.log('Sample deleted successfully');
-  } catch (error: any) {
-    console.error('Error deleting sample:', error);
-    alert(error.response?.data?.message || 'Failed to delete sample');
-    deletingSampleId.value = null;
-  }
-};
-
 // Handle detection from camera
 const handleDetection = (detection: any) => {
   console.log('Fish detected:', detection);
@@ -359,7 +281,7 @@ const aiAverages = computed(() => {
           </div>
         </div>
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
-          <div class="flex gap-2 flex-wrap">
+          <div class="flex gap-2">
             <Button variant="outline" @click="printReport">🖨️ Print Report</Button>
             <Button variant="secondary" @click="exportToExcel">📊 Export to Excel</Button>
             <Dialog v-model:open="showDetectionDialog">
@@ -378,41 +300,6 @@ const aiAverages = computed(() => {
                   @detection="handleDetection"
                   @error="handleDetectionError"
                 />
-              </DialogContent>
-            </Dialog>
-            
-            <!-- Delete Button with Confirmation Dialog -->
-            <Dialog v-model:open="showDeleteDialog">
-              <DialogTrigger as-child>
-                <Button variant="destructive" class="ml-auto">🗑️ Delete Report</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Delete Sampling Report</DialogTitle>
-                </DialogHeader>
-                <div class="py-4">
-                  <p class="text-sm text-muted-foreground mb-4">
-                    Are you sure you want to delete this sampling report? This action cannot be undone.
-                  </p>
-                  <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
-                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
-                      <strong>Warning:</strong> This will permanently delete:
-                    </p>
-                    <ul class="text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside mt-2">
-                      <li>All sample data ({{ report.totals.totalSamples }} samples)</li>
-                      <li>Historical records for DOC {{ report.doc }}</li>
-                      <li>Report dated {{ report.date }}</li>
-                    </ul>
-                  </div>
-                </div>
-                <div class="flex justify-end gap-2">
-                  <Button variant="outline" @click="showDeleteDialog = false" :disabled="isDeleting">
-                    Cancel
-                  </Button>
-                  <Button variant="destructive" @click="deleteSamplingReport" :disabled="isDeleting">
-                    {{ isDeleting ? 'Deleting...' : 'Delete Report' }}
-                  </Button>
-                </div>
               </DialogContent>
             </Dialog>
           </div>
@@ -473,28 +360,16 @@ const aiAverages = computed(() => {
                 <th class="px-4 py-2 text-left">Width (cm)</th>
                 <th class="px-4 py-2 text-left">Type</th>
                 <th class="px-4 py-2 text-left">Tested At</th>
-                <th class="px-4 py-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in organizedSamples" :key="row.id" class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+              <tr v-for="row in organizedSamples" :key="row.no" class="border-b border-gray-200 dark:border-gray-700">
                 <td class="px-4 py-2">{{ row.no }}</td>
                 <td class="px-4 py-2">{{ row.weight ? row.weight.toFixed(1) : '' }}</td>
                 <td class="px-4 py-2">{{ row.length ? row.length.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.width ? row.width.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.type }}</td>
                 <td class="px-4 py-2">{{ row.testedAt || '-' }}</td>
-                <td class="px-4 py-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    @click="deleteSample(row.id)"
-                    :disabled="deletingSampleId === row.id"
-                    class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
-                  >
-                    {{ deletingSampleId === row.id ? '...' : '🗑️' }}
-                  </Button>
-                </td>
               </tr>
             </tbody>
           </table>

@@ -39,7 +39,6 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('samplings/{sampling}', [SamplingController::class, 'destroy'])->name('samplings.destroy');
     Route::get('samplings/report', [SamplingController::class, 'report'])->name('samplings.report');
     Route::post('samplings/{sampling}/generate-samples', [SamplingController::class, 'generateSamples'])->name('samplings.generate-samples');
-    Route::delete('samples/{sample}', [SamplingController::class, 'destroySample'])->name('samples.destroy');
     Route::get('samplings/export-report/{sampling?}', [SamplingController::class, 'exportReport'])->name('samplings.export-report');
     Route::get('test-pagination', function() {
         $samplings = \App\Models\Sampling::with('investor')->withCount('samples')->paginate(10);
