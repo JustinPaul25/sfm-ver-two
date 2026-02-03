@@ -5,6 +5,7 @@ import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
+import { router } from '@inertiajs/vue3';
 import FishDetectionCamera from '@/components/FishDetectionCamera.vue';
 import Dialog from '@/components/ui/dialog/Dialog.vue';
 import DialogContent from '@/components/ui/dialog/DialogContent.vue';
@@ -203,6 +204,36 @@ const exportToExcel = () => {
   }
 };
 
+const showDeleteDialog = ref(false);
+const isDeleting = ref(false);
+
+const deleteSamplingReport = async () => {
+  const samplingId = props.sampling?.id;
+  if (!samplingId) {
+    alert('No sampling report to delete');
+    return;
+  }
+
+  isDeleting.value = true;
+  
+  try {
+    await axios.delete(route('samplings.destroy', samplingId));
+    
+    // Redirect to samplings list after successful deletion
+    router.visit(route('samplings.index'), {
+      onSuccess: () => {
+        // You can show a success message here if you have a toast notification system
+        console.log('Sampling report deleted successfully');
+      }
+    });
+  } catch (error: any) {
+    console.error('Error deleting sampling:', error);
+    alert(error.response?.data?.message || 'Failed to delete sampling report');
+    isDeleting.value = false;
+    showDeleteDialog.value = false;
+  }
+};
+
 // Handle detection from camera
 const handleDetection = (detection: any) => {
   console.log('Fish detected:', detection);
@@ -281,7 +312,7 @@ const aiAverages = computed(() => {
           </div>
         </div>
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
-          <div class="flex gap-2">
+          <div class="flex gap-2 flex-wrap">
             <Button variant="outline" @click="printReport">🖨️ Print Report</Button>
             <Button variant="secondary" @click="exportToExcel">📊 Export to Excel</Button>
             <Dialog v-model:open="showDetectionDialog">
@@ -300,6 +331,41 @@ const aiAverages = computed(() => {
                   @detection="handleDetection"
                   @error="handleDetectionError"
                 />
+              </DialogContent>
+            </Dialog>
+            
+            <!-- Delete Button with Confirmation Dialog -->
+            <Dialog v-model:open="showDeleteDialog">
+              <DialogTrigger as-child>
+                <Button variant="destructive" class="ml-auto">🗑️ Delete Report</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete Sampling Report</DialogTitle>
+                </DialogHeader>
+                <div class="py-4">
+                  <p class="text-sm text-muted-foreground mb-4">
+                    Are you sure you want to delete this sampling report? This action cannot be undone.
+                  </p>
+                  <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                      <strong>Warning:</strong> This will permanently delete:
+                    </p>
+                    <ul class="text-sm text-yellow-700 dark:text-yellow-300 list-disc list-inside mt-2">
+                      <li>All sample data ({{ report.totals.totalSamples }} samples)</li>
+                      <li>Historical records for DOC {{ report.doc }}</li>
+                      <li>Report dated {{ report.date }}</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="flex justify-end gap-2">
+                  <Button variant="outline" @click="showDeleteDialog = false" :disabled="isDeleting">
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" @click="deleteSamplingReport" :disabled="isDeleting">
+                    {{ isDeleting ? 'Deleting...' : 'Delete Report' }}
+                  </Button>
+                </div>
               </DialogContent>
             </Dialog>
           </div>
