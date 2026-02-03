@@ -101,6 +101,16 @@ class SampleSeeder extends Seeder
                     $length = max(5.0, $length);
                     $width = max(5.5, $width);
                     
+                    // Create realistic timestamp for when this sample was tested
+                    // Samples are tested at different times throughout the sampling day
+                    // Add random minutes (0-180 minutes = 0-3 hours) to the sampling date
+                    $samplingDateTime = \Carbon\Carbon::parse($sampling->date_sampling);
+                    // Set a base time for sampling (e.g., 9:00 AM)
+                    $samplingDateTime->setTime(9, 0, 0);
+                    // Add random minutes for each sample (stagger the testing times)
+                    $minutesOffset = ($i - 1) * rand(5, 15) + rand(0, 5); // Each sample takes 5-15 minutes + random variation
+                    $testedAt = $samplingDateTime->copy()->addMinutes($minutesOffset);
+                    
                     // Create sample
                     Sample::create([
                         'investor_id' => $sampling->investor_id,
@@ -109,6 +119,8 @@ class SampleSeeder extends Seeder
                         'weight' => $weight,
                         'length' => $length,
                         'width' => $width,
+                        'created_at' => $testedAt,
+                        'updated_at' => $testedAt,
                     ]);
                     
                     $sampleCount++;

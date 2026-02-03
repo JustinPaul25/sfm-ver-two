@@ -42,7 +42,6 @@ const report = ref({
     presentStocks: 0,
     biomass: 0,
     feedingRate: 0,
-    dailyFeedRation: 0,
     feedConsumption: 0,
     prevABW: 0,
     prevBiomass: 0,
@@ -109,7 +108,8 @@ const organizedSamples = computed(() => {
     length: sample.length ? roundToTenth(sample.length) : null,
     width: sample.width ? roundToTenth(sample.width) : null,
     type: tooltipData.value.type,
-    testedAt: formatTimestamp(sample.created_at),
+    // Only show tested_at if the sample has actual weight data (has been tested)
+    testedAt: sample.weight ? formatTimestamp(sample.created_at) : null,
   }));
 });
 
@@ -369,7 +369,7 @@ const aiAverages = computed(() => {
                 <td class="px-4 py-2">{{ row.length ? row.length.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.width ? row.width.toFixed(1) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.type }}</td>
-                <td class="px-4 py-2">{{ row.testedAt }}</td>
+                <td class="px-4 py-2">{{ row.testedAt || '-' }}</td>
               </tr>
             </tbody>
           </table>
@@ -386,7 +386,6 @@ const aiAverages = computed(() => {
               <li>Present Stocks: <span class="font-medium">{{ report.totals.presentStocks }} pcs</span></li>
               <li>Biomass: <span class="font-medium">{{ report.totals.biomass }} kgs</span></li>
               <li>Feeding Rate: <span class="font-medium">{{ report.totals.feedingRate }}%</span></li>
-              <li>Daily Feed Ration: <span class="font-medium">{{ report.totals.dailyFeedRation }} kgs</span></li>
               <li>Feed Consumption: <span class="font-medium">{{ report.totals.feedConsumption }} kgs</span></li>
               <li>Previous ABW: <span class="font-medium">{{ report.totals.prevABW }} grams</span></li>
               <li>Previous biomass: <span class="font-medium">{{ report.totals.prevBiomass }} kgs</span></li>
@@ -446,7 +445,6 @@ const aiAverages = computed(() => {
                   <th class="px-2 py-2">Wt. Increment per day (grams)</th>
                   <th class="px-2 py-2">Biomass (kgs)</th>
                   <th class="px-2 py-2">Feeding Rate</th>
-                  <th class="px-2 py-2">Daily Feed Ration (kgs)</th>
                   <th class="px-2 py-2">Feed Consumed (kgs)</th>
                   <th class="px-2 py-2">Total Wt. gained (kgs)</th>
                   <th class="px-2 py-2">FCR</th>
@@ -463,7 +461,6 @@ const aiAverages = computed(() => {
                   <td class="px-2 py-1">{{ row.wtInc }}</td>
                   <td class="px-2 py-1">{{ row.biomass }}</td>
                   <td class="px-2 py-1">{{ row.fr }}</td>
-                  <td class="px-2 py-1">{{ row.dfr }}</td>
                   <td class="px-2 py-1">{{ row.feed }}</td>
                   <td class="px-2 py-1">{{ row.totalGained }}</td>
                   <td class="px-2 py-1">{{ row.fcr }}</td>

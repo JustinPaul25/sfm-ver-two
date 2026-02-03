@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { type SharedData } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Card from '@/components/ui/card/Card.vue';
 import CardContent from '@/components/ui/card/CardContent.vue';
@@ -16,6 +17,10 @@ import DialogContent from '@/components/ui/dialog/DialogContent.vue';
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
+
+const page = usePage<SharedData>();
+const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
+const isInvestor = computed(() => userRole.value === 'investor');
 
 interface DailyBreakdown {
   date: string;
@@ -525,7 +530,7 @@ onMounted(() => {
                           <div class="flex items-center justify-end gap-2">
                             <span>{{ day.actual_amount.toFixed(2) }}</span>
                             <Button
-                              v-if="day.actual_amount === 0"
+                              v-if="day.actual_amount === 0 && !isInvestor"
                               variant="ghost"
                               size="sm"
                               @click="openAddConsumptionDialog(cage.cage_id, day.date, day.scheduled_amount)"

@@ -130,11 +130,8 @@ const feedConsumptions = ref(props.feedConsumptions);
 const feedingSchedule = ref<FeedingSchedule | null>(props.feedingSchedule || null);
 const showAddDialog = ref(false);
 const showEditDialog = ref(false);
-const showEditCageDialog = ref(false);
 const editingConsumption = ref<FeedConsumption | null>(null);
-const editCage = ref<Cage | null>(null);
 const loading = ref(false);
-const farmersForEdit = ref<Farmer[]>([]);
 const currentPage = ref(props.feedConsumptions.current_page || 1);
 const perPage = ref(props.feedConsumptions.per_page || 10);
 
@@ -419,54 +416,8 @@ const resetNewConsumption = () => {
   };
 };
 
-// Edit cage functions
-const openEditCageDialog = () => {
-  // Prevent investors from editing cages
-  if (isInvestor.value) {
-    return;
-  }
-  editCage.value = { ...cage.value };
-  if (editCage.value.investor_id) {
-    fetchFarmersForEdit(editCage.value.investor_id);
-  }
-  showEditCageDialog.value = true;
-};
-
-async function fetchFarmersForEdit(investorId: number | null) {
-  if (!investorId) {
-    farmersForEdit.value = [];
-    return;
-  }
-  try {
-    const response = await fetch(`/users/farmers-by-investor?investor_id=${investorId}`);
-    if (response.ok) {
-      farmersForEdit.value = await response.json();
-    }
-  } catch (error) {
-    console.error('Error fetching farmers:', error);
-    farmersForEdit.value = [];
-  }
-}
-
-async function updateCageHandler() {
-  if (editCage.value && editCage.value.id) {
-    try {
-      await store.updateCage(editCage.value.id, {
-        number_of_fingerlings: editCage.value.number_of_fingerlings,
-        feed_types_id: editCage.value.feed_types_id,
-        investor_id: editCage.value.investor_id,
-        farmer_id: editCage.value.farmer_id,
-      });
-      showEditCageDialog.value = false;
-      editCage.value = null;
-      Swal.fire({ icon: 'success', title: 'Cage updated successfully!' });
-      // Refresh the page to get updated data
-      router.reload();
-    } catch (error: any) {
-      Swal.fire({ icon: 'error', title: 'Error', text: error?.message || 'Failed to update cage.' });
-    }
-  }
-}
+// Edit cage functionality removed - investors should not be able to edit cages
+// Admins and farmers can edit cages through the main cages list page
 
 // Pagination helper
 const getPageNumbers = () => {
@@ -516,7 +467,6 @@ onMounted(() => {
       <div class="flex items-center justify-between">
         <h1 class="text-3xl font-bold">Cage #{{ cageId }}</h1>
         <div class="flex gap-2">
-          <Button v-if="!isInvestor" @click="openEditCageDialog">Edit Cage</Button>
           <Link href="/cages">
             <Button variant="secondary">Back to Cages</Button>
           </Link>
@@ -593,7 +543,7 @@ onMounted(() => {
         <CardHeader>
           <div class="flex items-center justify-between">
             <CardTitle>Daily Feed Consumption</CardTitle>
-            <Button @click="showAddDialog = true">Add Feed Consumption</Button>
+            <Button v-if="!isInvestor" @click="showAddDialog = true">Add Feed Consumption</Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -623,7 +573,7 @@ onMounted(() => {
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Feed Amount (kg)</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Feeding Guide</th>
                   <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Notes</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th v-if="!isInvestor" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
@@ -633,7 +583,7 @@ onMounted(() => {
                   <td class="px-6 py-4 whitespace-nowrap text-sm">{{ consumption.feed_amount }} kg</td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">{{ getFeedingGuide() }}</td>
                   <td class="px-6 py-4 text-sm">{{ consumption.notes || '-' }}</td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                  <td v-if="!isInvestor" class="px-6 py-4 whitespace-nowrap text-sm">
                     <div class="flex space-x-2">
                       <Button variant="outline" size="sm" @click="openEditDialog(consumption)">Edit</Button>
                       <Button variant="destructive" size="sm" @click="deleteFeedConsumption(consumption)">Delete</Button>
@@ -641,8 +591,9 @@ onMounted(() => {
                   </td>
                 </tr>
                 <tr v-if="feedConsumptions.data.length === 0">
-                  <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No feed consumption records found. Add the first record to get started.
+                  <td :colspan="isInvestor ? 5 : 6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <span v-if="isInvestor">No feed consumption records found.</span>
+                    <span v-else>No feed consumption records found. Add the first record to get started.</span>
                   </td>
                 </tr>
               </tbody>
@@ -857,51 +808,6 @@ onMounted(() => {
       </DialogContent>
     </Dialog>
 
-    <!-- Edit Cage Dialog -->
-    <Dialog v-model:open="showEditCageDialog" v-if="editCage">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Cage</DialogTitle>
-        </DialogHeader>
-        <form @submit.prevent="updateCageHandler" class="flex flex-col gap-4 mt-2">
-          <div class="flex flex-col gap-1">
-            <label for="edit_investor" class="text-sm font-medium">Investor</label>
-            <select 
-              id="edit_investor"
-              v-model="editCage.investor_id" 
-              @change="fetchFarmersForEdit(editCage.investor_id)"
-              class="input w-full rounded border p-2" 
-              required
-            >
-              <option v-for="inv in investors" :key="inv.id" :value="inv.id" class="bg-background text-foreground">{{ inv.name }}</option>
-            </select>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label for="edit_fingerlings" class="text-sm font-medium">Number of Fingerlings</label>
-            <Input id="edit_fingerlings" v-model.number="editCage.number_of_fingerlings" type="number" placeholder="Number of Fingerlings" required />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label for="edit_feedType" class="text-sm font-medium">Feed Type</label>
-            <select id="edit_feedType" v-model.number="editCage.feed_types_id" class="input w-full rounded border p-2" required>
-              <option v-for="f in feedTypes" :key="f.id" :value="f.id" class="bg-background text-foreground">{{ f.feed_type }}</option>
-            </select>
-          </div>
-          <div v-if="isAdmin" class="flex flex-col gap-1">
-            <label for="edit_farmer" class="text-sm font-medium">Assign Farmer (Optional)</label>
-            <select id="edit_farmer" v-model.number="editCage.farmer_id" class="input w-full rounded border p-2">
-              <option :value="null">No farmer assigned</option>
-              <option v-for="farmer in farmersForEdit" :key="farmer.id" :value="farmer.id" class="bg-background text-foreground">
-                {{ farmer.name }}
-              </option>
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Only farmers belonging to the selected investor are shown</p>
-          </div>
-          <DialogFooter class="flex justify-end gap-2 mt-4">
-            <Button type="button" variant="secondary" @click="showEditCageDialog = false">Cancel</Button>
-            <Button type="submit" variant="default">Update</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <!-- Edit Cage Dialog removed - investors should not be able to edit cages -->
   </AppLayout>
 </template> 

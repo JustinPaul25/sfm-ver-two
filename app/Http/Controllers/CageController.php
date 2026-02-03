@@ -352,6 +352,22 @@ class CageController extends Controller
 
     public function storeFeedConsumption(Request $request, Cage $cage)
     {
+        $user = $request->user();
+        
+        // Investors cannot create feed consumption records
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot create feed consumption records'
+            ], 403);
+        }
+        
+        // Farmers can only manage their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only manage feed consumption for your own cages'
+            ], 403);
+        }
+        
         try {
             $request->validate([
                 'day_number' => 'required|integer|min:1',
@@ -389,6 +405,22 @@ class CageController extends Controller
 
     public function updateFeedConsumption(Request $request, Cage $cage, CageFeedConsumption $consumption)
     {
+        $user = $request->user();
+        
+        // Investors cannot update feed consumption records
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot update feed consumption records'
+            ], 403);
+        }
+        
+        // Farmers can only manage their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only manage feed consumption for your own cages'
+            ], 403);
+        }
+        
         try {
             $request->validate([
                 'feed_amount' => 'required|numeric|min:0',
@@ -406,8 +438,24 @@ class CageController extends Controller
         }
     }
 
-    public function destroyFeedConsumption(Cage $cage, CageFeedConsumption $consumption)
+    public function destroyFeedConsumption(Request $request, Cage $cage, CageFeedConsumption $consumption)
     {
+        $user = $request->user();
+        
+        // Investors cannot delete feed consumption records
+        if ($user && $user->isInvestor()) {
+            return response()->json([
+                'message' => 'Investors cannot delete feed consumption records'
+            ], 403);
+        }
+        
+        // Farmers can only manage their own cages
+        if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+            return response()->json([
+                'message' => 'You can only manage feed consumption for your own cages'
+            ], 403);
+        }
+        
         try {
             $consumption->delete();
 
