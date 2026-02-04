@@ -6,7 +6,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 // import { BookOpen, Folder, LayoutGrid } from 'lucide-vue-next';
-import { LayoutGrid, Users, File, List, BarChart3, Clock, UserCog, Settings } from 'lucide-vue-next';
+import { LayoutGrid, Users, File, List, BarChart3, Clock, UserCog, Settings, LineChart } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 import { computed } from 'vue';
 
@@ -87,6 +87,11 @@ const adminNavItems: NavItem[] = [
         title: 'System Settings',
         href: '/settings/system',
         icon: Settings,
+    },
+    {
+        title: 'Forecasting Simulation',
+        href: '/forecasting/simulation',
+        icon: LineChart,
     },
     {
         title: 'Investors',

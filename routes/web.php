@@ -11,6 +11,7 @@ use App\Http\Controllers\FeedingReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\SystemSettingsController;
+use App\Http\Controllers\ForecastingSimulationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -113,6 +114,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // SystemSettingsController (admin only)
     Route::get('settings/system', [SystemSettingsController::class, 'index'])->name('settings.system');
+
+    // ForecastingSimulationController (admin only)
+    Route::get('forecasting/simulation', [ForecastingSimulationController::class, 'index'])->name('forecasting.simulation');
     Route::put('settings/system/harvest-settings', [SystemSettingsController::class, 'updateHarvestSettings'])->name('settings.system.harvest-settings');
 });
 

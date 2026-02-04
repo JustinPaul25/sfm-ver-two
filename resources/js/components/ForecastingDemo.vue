@@ -68,6 +68,17 @@ async function runForecast() {
   }
 }
 
+// Bar height for visual preview: min-max scale so variation is visible
+function getBarHeight(value: number): number {
+  const results = forecastResults.value;
+  if (results.length === 0) return 0;
+  const min = Math.min(...results);
+  const max = Math.max(...results);
+  if (max === min) return 128;
+  const normalized = (value - min) / (max - min);
+  return Math.max(8, normalized * 128); // 128px = h-32, min 8px for visibility
+}
+
 // Load system algorithm on mount
 loadSystemAlgorithm();
 
@@ -228,7 +239,7 @@ onUnmounted(() => {
               :key="index"
               class="flex-1 rounded-t bg-primary/70 transition-all hover:bg-primary"
               :style="{
-                height: `${(value / Math.max(...forecastResults)) * 100}%`,
+                height: `${getBarHeight(value)}px`,
               }"
               :title="`Step ${index + 1}: ${value.toFixed(2)}`"
             ></div>
