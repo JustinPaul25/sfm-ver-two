@@ -14,6 +14,8 @@ export interface ForecastResult {
   confidence?: number;
   algorithm: string;
   trainingTime: number;
+  mae?: number;
+  rmse?: number;
 }
 
 export function useForecastingService() {
@@ -272,7 +274,7 @@ export function useForecastingService() {
       currentModel.value = model;
 
       // Train model
-      await model.fit(xsTensor, ysTensor, {
+      const history = await model.fit(xsTensor, ysTensor, {
         epochs,
         batchSize: 32,
         validationSplit: 0.1,
@@ -315,11 +317,23 @@ export function useForecastingService() {
       ysTensor.dispose();
 
       const trainingTime = Date.now() - startTime;
+      const range = max - min;
+      const lastLoss = (history.history.loss as number[] | undefined)?.at(-1);
+      const lastMae = (history.history.mae as number[] | undefined)?.at(-1);
+      const mae = lastMae !== undefined ? (range === 0 ? 0 : lastMae * range) : undefined;
+      const rmse =
+        lastLoss !== undefined
+          ? range === 0
+            ? 0
+            : Math.sqrt(lastLoss) * range
+          : undefined;
 
       return {
         predictions: denormalizedPredictions,
         algorithm,
         trainingTime,
+        mae,
+        rmse,
       };
     } finally {
       isTraining.value = false;

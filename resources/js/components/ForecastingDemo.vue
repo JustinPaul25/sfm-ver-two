@@ -18,6 +18,8 @@ const epochs = ref(50);
 const forecastResults = ref<number[]>([]);
 const trainingTime = ref(0);
 const error = ref<string>('');
+const mae = ref<number | null>(null);
+const rmse = ref<number | null>(null);
 
 async function loadSystemAlgorithm() {
   try {
@@ -32,6 +34,8 @@ async function runForecast() {
   error.value = '';
   forecastResults.value = [];
   trainingTime.value = 0;
+  mae.value = null;
+  rmse.value = null;
 
   try {
     // Parse sample data
@@ -62,6 +66,8 @@ async function runForecast() {
 
     forecastResults.value = result.predictions;
     trainingTime.value = result.trainingTime;
+    mae.value = typeof result.mae === 'number' ? result.mae : null;
+    rmse.value = typeof result.rmse === 'number' ? result.rmse : null;
   } catch (err: any) {
     error.value = err.message || 'An error occurred during forecasting.';
     console.error('Forecasting error:', err);
@@ -210,6 +216,11 @@ onUnmounted(() => {
           <p class="text-sm text-muted-foreground">
             Algorithm: <strong class="uppercase">{{ selectedAlgorithm }}</strong> |
             Training Time: <strong>{{ (trainingTime / 1000).toFixed(2) }}s</strong>
+          </p>
+          <p v-if="mae !== null || rmse !== null" class="text-sm text-muted-foreground">
+            <span v-if="mae !== null">MAE: <strong>{{ mae.toFixed(2) }}</strong></span>
+            <template v-if="mae !== null && rmse !== null"> | </template>
+            <span v-if="rmse !== null">RMSE: <strong>{{ rmse.toFixed(2) }}</strong></span>
           </p>
         </div>
 
