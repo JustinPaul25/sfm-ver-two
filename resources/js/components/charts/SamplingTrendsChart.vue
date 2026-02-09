@@ -165,23 +165,34 @@ const loadTensorFlow = async () => {
     return tf;
 };
 
+// Fixed seed so same data produces same predictions across dashboards
+const MODEL_SEED = 42;
+
 const createModel = (tfInstance: typeof tfTypes) => {
+    const seededInitializer = () =>
+        tfInstance.initializers.glorotUniform({ seed: MODEL_SEED });
     const newModel = tfInstance.sequential({
         layers: [
             tfInstance.layers.dense({
                 inputShape: [5],
                 units: 10,
                 activation: 'relu',
+                kernelInitializer: seededInitializer(),
+                biasInitializer: seededInitializer(),
             }),
-            tfInstance.layers.dropout({ rate: 0.2 }),
+            tfInstance.layers.dropout({ rate: 0.2, seed: MODEL_SEED }),
             tfInstance.layers.dense({
                 units: 10,
                 activation: 'relu',
+                kernelInitializer: seededInitializer(),
+                biasInitializer: seededInitializer(),
             }),
-            tfInstance.layers.dropout({ rate: 0.2 }),
+            tfInstance.layers.dropout({ rate: 0.2, seed: MODEL_SEED + 1 }),
             tfInstance.layers.dense({
                 units: 1,
                 activation: 'linear',
+                kernelInitializer: seededInitializer(),
+                biasInitializer: seededInitializer(),
             }),
         ],
     });
@@ -301,11 +312,12 @@ const processChartData = async () => {
     const counts = props.trends.map((item) => item.count);
     const weights = props.trends.map((item) => item.avg_weight);
 
-    // Create actual data datasets
+    // Create actual data datasets (explicit yAxisID so both dashboards use same scale)
     const datasets: any[] = [
         {
             label: 'Samplings',
             data: counts,
+            yAxisID: 'y',
             borderColor: 'rgb(59, 130, 246)',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
             tension: 0.4,
@@ -316,11 +328,11 @@ const processChartData = async () => {
         {
             label: 'Avg Weight (g)',
             data: weights,
+            yAxisID: 'y1',
             borderColor: 'rgb(16, 185, 129)',
             backgroundColor: 'rgba(16, 185, 129, 0.1)',
             tension: 0.4,
             fill: true,
-            yAxisID: 'y1',
             pointRadius: 3,
             pointHoverRadius: 5,
         },
@@ -336,19 +348,23 @@ const processChartData = async () => {
             // Train model and predict for sampling counts
             const samplingModel = await trainSamplingModel(tfInstance, counts);
             if (samplingModel) {
-                const countPredictions = await predictFuture(tfInstance, counts, predictionDays.value);
+                let countPredictions = await predictFuture(tfInstance, counts, predictionDays.value);
+                // Clamp to count scale so Predicted Samplings never uses the weight axis (e.g. 250)
+                const maxCount = Math.max(10, 2 * (Math.max(...counts) || 1));
+                countPredictions = countPredictions.map((v) => Math.min(Math.max(0, v), maxCount));
                 const futureDates = generateFutureDates(
                     props.trends[props.trends.length - 1].date,
                     predictionDays.value
                 );
 
-                // Add prediction datasets
+                // Add prediction datasets (left axis = samplings count)
                 datasets.push({
                     label: 'Predicted Samplings',
                     data: [
                         ...Array(props.trends.length).fill(null),
                         ...countPredictions,
                     ],
+                    yAxisID: 'y',
                     borderColor: 'rgb(99, 102, 241)',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     borderDash: [5, 5],
@@ -365,20 +381,22 @@ const processChartData = async () => {
             // Train model and predict for weights
             const weightModel = await trainSamplingModel(tfInstance, weights);
             if (weightModel) {
-                const weightPredictions = await predictFuture(tfInstance, weights, predictionDays.value);
-                
+                let weightPredictions = await predictFuture(tfInstance, weights, predictionDays.value);
+                // Clamp to non-negative and a reasonable max so scale stays consistent
+                const maxWeight = Math.max(300, ...weights, ...weightPredictions);
+                weightPredictions = weightPredictions.map((v) => Math.min(Math.max(0, v), maxWeight));
                 datasets.push({
                     label: 'Predicted Avg Weight (g)',
                     data: [
                         ...Array(props.trends.length).fill(null),
                         ...weightPredictions,
                     ],
+                    yAxisID: 'y1',
                     borderColor: 'rgb(34, 197, 94)',
                     backgroundColor: 'rgba(34, 197, 94, 0.1)',
                     borderDash: [5, 5],
                     tension: 0.4,
                     fill: false,
-                    yAxisID: 'y1',
                     pointRadius: 2,
                     pointHoverRadius: 4,
                 });

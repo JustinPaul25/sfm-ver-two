@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -28,6 +28,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 const selectedPeriod = ref('30days');
 const customStartDate = ref('');
 const customEndDate = ref('');
+
+// Cage filter (same scope as Admin dashboard = same data → same predictions)
+const selectedCageId = ref<string | null>(null);
 
 const periods = [
     { value: 'day', label: 'Today' },
@@ -93,6 +96,10 @@ function reloadDashboard() {
         params.end_date = customEndDate.value;
     }
     
+    if (selectedCageId.value) {
+        params.cage_no = selectedCageId.value;
+    }
+    
     router.get('/investor/dashboard', params, {
         preserveState: true,
         preserveScroll: true,
@@ -113,6 +120,15 @@ function formatNumber(num: number) {
 function formatWeight(weight: number) {
     return `${weight.toFixed(1)}g`;
 }
+
+// Sync cage filter from URL so bookmarks/back match Admin view
+onMounted(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const cageNo = urlParams.get('cage_no');
+    if (cageNo && props.cages?.some((c: any) => c.id.toString() === cageNo)) {
+        selectedCageId.value = cageNo;
+    }
+});
 </script>
 
 <template>
@@ -188,8 +204,30 @@ function formatWeight(weight: number) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Sampling Trends Chart -->
                 <Card class="p-6">
-                    <div class="mb-4">
+                    <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <h3 class="text-lg font-semibold">Sampling Trends</h3>
+                        <!-- Cage filter: same scope as Admin = same predictions -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-muted-foreground">Cage:</span>
+                            <div class="flex flex-wrap gap-1">
+                                <Button
+                                    :variant="!selectedCageId ? 'default' : 'outline'"
+                                    size="sm"
+                                    @click="selectedCageId = null; reloadDashboard()"
+                                >
+                                    All Cages
+                                </Button>
+                                <Button
+                                    v-for="cage in (cages || [])"
+                                    :key="cage.id"
+                                    :variant="selectedCageId === cage.id.toString() ? 'default' : 'outline'"
+                                    size="sm"
+                                    @click="selectedCageId = cage.id.toString(); reloadDashboard()"
+                                >
+                                    Cage {{ cage.id }}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                     <SamplingTrendsChart :trends="analytics.sampling_trends || []" />
                 </Card>
