@@ -14,13 +14,18 @@ use Illuminate\Support\Facades\DB;
 
 class InvestorDashboardController extends Controller
 {
+    /**
+     * Show the investor dashboard. All data is scoped to the authenticated user's
+     * investor account only (from $user->investor_id). No request input can change
+     * which investor's data is shown.
+     */
     public function index(Request $request)
     {
         $user = $request->user();
-        
-        // Get the investor associated with this user
+
+        // Only use the investor linked to this user — never from request
         $investor = Investor::find($user->investor_id);
-        
+
         if (!$investor) {
             return Inertia::render('InvestorDashboard/NoInvestor', [
                 'message' => 'You are not associated with any investor account. Please contact the administrator.'
@@ -31,6 +36,16 @@ class InvestorDashboardController extends Controller
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
         $cageNo = $request->get('cage_no');
+
+        // Ensure cage filter (if any) belongs to this investor only
+        if ($cageNo !== null && $cageNo !== '') {
+            $cageBelongsToInvestor = Cage::where('investor_id', $investor->id)
+                ->where('id', $cageNo)
+                ->exists();
+            if (!$cageBelongsToInvestor) {
+                $cageNo = null;
+            }
+        }
 
         // Set date range based on period
         $dateRange = $this->getDateRange($period, $startDate, $endDate);
@@ -87,9 +102,13 @@ class InvestorDashboardController extends Controller
         ];
     }
 
+    /**
+     * Build analytics for a single investor. Every query is filtered by $investorId
+     * so only that investor's cages, samplings, samples, and farmers are included.
+     */
     private function getInvestorAnalytics($investorId, $startDate, $endDate, $cageNo = null)
     {
-        // Get cages for this investor
+        // Get cages for this investor only
         $cagesQuery = Cage::where('investor_id', $investorId);
         if ($cageNo) {
             $cagesQuery->where('id', $cageNo);

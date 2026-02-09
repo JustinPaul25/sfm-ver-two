@@ -14,12 +14,23 @@ class CageFeedingScheduleController extends Controller
         $cageId = $request->get('cage_id');
         
         if ($cageId) {
+            $user = $request->user();
             $cage = Cage::with(['feedingSchedules', 'investor', 'feedType'])->find($cageId);
-            
+
             if (!$cage) {
                 return response()->json(['error' => 'Cage not found'], 404);
             }
-            
+
+            // Farmers can only view their assigned cages
+            if ($user && $user->isFarmer() && $cage->farmer_id !== $user->id) {
+                return response()->json(['error' => 'You can only view feeding schedules for your assigned cages'], 403);
+            }
+
+            // Investors can only view their own cages
+            if ($user && $user->isInvestor() && $cage->investor_id !== $user->investor_id) {
+                return response()->json(['error' => 'You can only view your own cages'], 403);
+            }
+
             return Inertia::render('Cages/FeedingSchedule', [
                 'cage' => $cage,
                 'schedules' => $cage->feedingSchedules()->orderBy('created_at', 'desc')->get(),
@@ -62,6 +73,8 @@ class CageFeedingScheduleController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
+
         $request->validate([
             'cage_id' => 'required|exists:cages,id',
             'schedule_name' => 'required|string|max:255',
@@ -76,6 +89,26 @@ class CageFeedingScheduleController extends Controller
             'frequency' => 'required|in:daily,twice_daily,thrice_daily,four_times_daily',
             'notes' => 'nullable|string',
         ]);
+
+        // Farmers can only create schedules for their assigned cages
+        if ($user && $user->isFarmer()) {
+            $cage = Cage::find($request->cage_id);
+            if (!$cage || $cage->farmer_id !== $user->id) {
+                return response()->json([
+                    'message' => 'You can only create feeding schedules for your assigned cages',
+                ], 403);
+            }
+        }
+
+        // Investors can only create schedules for their own cages
+        if ($user && $user->isInvestor()) {
+            $cage = Cage::find($request->cage_id);
+            if (!$cage || $cage->investor_id !== $user->investor_id) {
+                return response()->json([
+                    'message' => 'You can only create feeding schedules for your own cages',
+                ], 403);
+            }
+        }
 
         // Deactivate any existing active schedule for this cage
         CageFeedingSchedule::where('cage_id', $request->cage_id)
@@ -106,6 +139,23 @@ class CageFeedingScheduleController extends Controller
 
     public function update(Request $request, CageFeedingSchedule $schedule)
     {
+        $user = $request->user();
+        $cage = $schedule->cage ?? Cage::find($schedule->cage_id);
+
+        // Farmers can only update schedules for their assigned cages
+        if ($user && $user->isFarmer() && (!$cage || $cage->farmer_id !== $user->id)) {
+            return response()->json([
+                'message' => 'You can only update feeding schedules for your assigned cages',
+            ], 403);
+        }
+
+        // Investors can only update schedules for their own cages
+        if ($user && $user->isInvestor() && (!$cage || $cage->investor_id !== $user->investor_id)) {
+            return response()->json([
+                'message' => 'You can only update feeding schedules for your own cages',
+            ], 403);
+        }
+
         $request->validate([
             'schedule_name' => 'required|string|max:255',
             'feeding_time_1' => 'nullable|date_format:H:i',
@@ -140,8 +190,25 @@ class CageFeedingScheduleController extends Controller
         ]);
     }
 
-    public function destroy(CageFeedingSchedule $schedule)
+    public function destroy(Request $request, CageFeedingSchedule $schedule)
     {
+        $user = $request->user();
+        $cage = $schedule->cage ?? Cage::find($schedule->cage_id);
+
+        // Farmers can only delete schedules for their assigned cages
+        if ($user && $user->isFarmer() && (!$cage || $cage->farmer_id !== $user->id)) {
+            return response()->json([
+                'message' => 'You can only delete feeding schedules for your assigned cages',
+            ], 403);
+        }
+
+        // Investors can only delete schedules for their own cages
+        if ($user && $user->isInvestor() && (!$cage || $cage->investor_id !== $user->investor_id)) {
+            return response()->json([
+                'message' => 'You can only delete feeding schedules for your own cages',
+            ], 403);
+        }
+
         $schedule->delete();
 
         return response()->json([
@@ -149,8 +216,25 @@ class CageFeedingScheduleController extends Controller
         ]);
     }
 
-    public function activate(CageFeedingSchedule $schedule)
+    public function activate(Request $request, CageFeedingSchedule $schedule)
     {
+        $user = $request->user();
+        $cage = $schedule->cage ?? Cage::find($schedule->cage_id);
+
+        // Farmers can only activate schedules for their assigned cages
+        if ($user && $user->isFarmer() && (!$cage || $cage->farmer_id !== $user->id)) {
+            return response()->json([
+                'message' => 'You can only activate feeding schedules for your assigned cages',
+            ], 403);
+        }
+
+        // Investors can only activate schedules for their own cages
+        if ($user && $user->isInvestor() && (!$cage || $cage->investor_id !== $user->investor_id)) {
+            return response()->json([
+                'message' => 'You can only activate feeding schedules for your own cages',
+            ], 403);
+        }
+
         // Deactivate all other schedules for this cage
         CageFeedingSchedule::where('cage_id', $schedule->cage_id)
             ->where('is_active', true)
@@ -322,15 +406,41 @@ class CageFeedingScheduleController extends Controller
 
     public function autoGenerate(Request $request)
     {
+        $user = $request->user();
+
         $request->validate([
             'cage_ids' => 'required|array',
             'cage_ids.*' => 'exists:cages,id',
             'overwrite_existing' => 'boolean',
         ]);
 
-        $cages = Cage::with(['investor', 'feedType', 'feedingSchedule', 'samplings.samples'])
-            ->whereIn('id', $request->cage_ids)
-            ->get();
+        $query = Cage::with(['investor', 'feedType', 'feedingSchedule', 'samplings.samples'])
+            ->whereIn('id', $request->cage_ids);
+
+        // Farmers can only auto-generate schedules for their assigned cages
+        if ($user && $user->isFarmer()) {
+            $query->where('farmer_id', $user->id);
+            $cages = $query->get();
+            $requestedIds = collect($request->cage_ids)->unique()->values();
+            $allowedIds = $cages->pluck('id');
+            if ($requestedIds->diff($allowedIds)->isNotEmpty()) {
+                return response()->json([
+                    'message' => 'You can only generate schedules for your assigned cages',
+                ], 403);
+            }
+        } elseif ($user && $user->isInvestor()) {
+            $query->where('investor_id', $user->investor_id);
+            $cages = $query->get();
+            $requestedIds = collect($request->cage_ids)->unique()->values();
+            $allowedIds = $cages->pluck('id');
+            if ($requestedIds->diff($allowedIds)->isNotEmpty()) {
+                return response()->json([
+                    'message' => 'You can only generate schedules for your own cages',
+                ], 403);
+            }
+        } else {
+            $cages = $query->get();
+        }
 
         $generatedSchedules = [];
         $errors = [];
