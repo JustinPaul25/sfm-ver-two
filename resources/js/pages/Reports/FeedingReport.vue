@@ -17,6 +17,7 @@ import DialogContent from '@/components/ui/dialog/DialogContent.vue';
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const page = usePage<SharedData>();
 const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
@@ -42,6 +43,7 @@ interface CageReport {
   schedule_name: string;
   feeding_frequency: string | null;
   feeding_times: string[];
+  feed_slots_count?: number;
   total_scheduled: number;
   total_consumed: number;
   variance: number;
@@ -97,6 +99,9 @@ const selectedCage = ref<string>('');
 
 // Expanded cages for daily breakdown
 const expandedCages = ref<Set<number>>(new Set());
+
+// Print option: show feeding times in print table (use default times when cage has none)
+const printFeedingTimesWithDefaults = ref(true);
 
 // Add consumption dialog
 const showAddConsumptionDialog = ref(false);
@@ -206,6 +211,19 @@ const formatDatePrint = (dateStr: string) => {
   return `${m}/${day}/${y}`;
 };
 
+/** Default feeding times by required number of feeds (24h "HH:mm"). Up to 4 slots. */
+const DEFAULT_FEEDING_TIMES_BY_SLOTS: Record<number, string[]> = {
+  1: ['08:00'],
+  2: ['08:00', '16:00'],
+  3: ['07:00', '12:00', '17:00'],
+  4: ['06:00', '10:00', '14:00', '18:00'],
+};
+
+const getDefaultFeedingTimes = (slotsCount: number): string[] => {
+  const n = Math.min(4, Math.max(1, slotsCount || 3));
+  return DEFAULT_FEEDING_TIMES_BY_SLOTS[n] ?? DEFAULT_FEEDING_TIMES_BY_SLOTS[3];
+};
+
 /** Format time for print table (e.g. "7am", "12pm"). Handles "HH:mm" (24h) and "Ham/pm". */
 const formatTimeSlot = (timeStr: string) => {
   if (!timeStr) return '';
@@ -243,16 +261,21 @@ interface PrintTableRow {
 
 const printTableRows = computed(() => {
   const rows: PrintTableRow[] = [];
+  const useDefaults = printFeedingTimesWithDefaults.value;
   for (const cage of reportData.value) {
+    const hasTimes = (cage.feeding_times || []).length > 0;
+    const rawTimes = hasTimes
+      ? (cage.feeding_times || []).slice(0, 3)
+      : (useDefaults ? getDefaultFeedingTimes(cage.feed_slots_count ?? 3).slice(0, 3) : []);
+    const times = rawTimes.map((t) => formatTimeSlot(t));
     for (const day of cage.daily_breakdown) {
-      const times = (cage.feeding_times || []).slice(0, 3);
       rows.push({
         date: day.date,
         cageNumber: cage.cage_number,
         feedAmountKg: day.actual_amount,
-        time1: times[0] ? formatTimeSlot(times[0]) : '',
-        time2: times[1] ? formatTimeSlot(times[1]) : '',
-        time3: times[2] ? formatTimeSlot(times[2]) : '',
+        time1: times[0] ?? '',
+        time2: times[1] ?? '',
+        time3: times[2] ?? '',
       });
     }
   }
@@ -343,20 +366,29 @@ onMounted(() => {
 
     <div class="flex flex-col gap-6 p-4 w-full print:p-2">
       <!-- Header -->
-      <div class="flex items-center justify-between print:hidden">
+      <div class="flex flex-wrap items-center justify-between gap-4 print:hidden">
         <div>
           <h1 class="text-3xl font-bold">Weekly Feeding Report</h1>
           <p class="text-muted-foreground mt-1">
             Track feeding schedules and consumption patterns
           </p>
         </div>
-        <div class="flex gap-2">
-          <Button variant="outline" @click="printReport">
-            🖨️ Print
-          </Button>
-          <Button @click="exportToExcel">
-            📊 Export Excel
-          </Button>
+        <div class="flex flex-wrap items-center gap-4">
+          <label class="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+            <Checkbox
+              id="print-feeding-times"
+              v-model:checked="printFeedingTimesWithDefaults"
+            />
+            <span>Print feeding times (use defaults when not set)</span>
+          </label>
+          <div class="flex gap-2">
+            <Button variant="outline" @click="printReport">
+              🖨️ Print
+            </Button>
+            <Button @click="exportToExcel">
+              📊 Export Excel
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -437,6 +469,9 @@ onMounted(() => {
           <p class="text-muted-foreground text-sm">
             {{ formatDate(period.start_date) }} - {{ formatDate(period.end_date) }}
             ({{ Math.round(period.days_count) }} days)
+          </p>
+          <p class="text-muted-foreground text-xs mt-0.5 print:hidden">
+            Based on the date range selected in filters. Summary and table include all days in this period.
           </p>
         </div>
 

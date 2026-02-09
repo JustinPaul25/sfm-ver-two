@@ -29,10 +29,11 @@ class SamplingSeeder extends Seeder
         })->values();
 
         // Create the first sampling: Detected Fish Info — 2:10 PM January 29, 2026
-        $firstCage = $validCages->first();
+        // Cage No. 1 (John Smith's first cage) — search by "1" or "2026-01-29" or "DOC-20260129-00" to find it
+        $firstCage = $validCages->first(); // Cage id 1, John Smith
         Sampling::create([
             'investor_id' => $firstCage->investor_id,
-            'cage_no' => $firstCage->id,
+            'cage_no' => $firstCage->id, // 1
             'date_sampling' => '2026-01-29',
             'doc' => 'DOC-20260129-00',
             'mortality' => 0,

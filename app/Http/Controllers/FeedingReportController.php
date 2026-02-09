@@ -155,41 +155,39 @@ class FeedingReportController extends Controller
             ->orderBy('consumption_date')
             ->get();
 
-        // Calculate daily breakdown
+        // Calculate daily breakdown: include every day in the period (so print table shows all dates)
         $dailyBreakdown = [];
         $currentDate = $startDate->copy();
-        
+        $daysInPeriod = (int) $startDate->diffInDays($endDate) + 1;
+
         while ($currentDate <= $endDate) {
             $dateStr = $currentDate->format('Y-m-d');
             // Match consumption by comparing dates (consumption_date is cast to Carbon date)
             $consumption = $consumptions->first(function ($item) use ($currentDate) {
                 return $item->consumption_date->isSameDay($currentDate);
             });
-            
+
             $scheduledAmount = $schedule ? (float) $schedule->total_daily_amount : 0;
             $actualAmount = $consumption ? (float) $consumption->feed_amount : 0;
-            
-            // Only include days with actual consumption data
-            if ($actualAmount > 0) {
-                $dailyBreakdown[] = [
-                    'date' => $dateStr,
-                    'day_name' => $currentDate->format('l'),
-                    'scheduled_amount' => $scheduledAmount,
-                    'actual_amount' => $actualAmount,
-                    'variance' => $actualAmount - $scheduledAmount,
-                    'adherence_rate' => $scheduledAmount > 0 
-                        ? round(($actualAmount / $scheduledAmount) * 100, 1)
-                        : 0,
-                    'notes' => $consumption ? $consumption->notes : null,
-                ];
-            }
-            
+
+            $dailyBreakdown[] = [
+                'date' => $dateStr,
+                'day_name' => $currentDate->format('l'),
+                'scheduled_amount' => $scheduledAmount,
+                'actual_amount' => $actualAmount,
+                'variance' => $actualAmount - $scheduledAmount,
+                'adherence_rate' => $scheduledAmount > 0
+                    ? round(($actualAmount / $scheduledAmount) * 100, 1)
+                    : 0,
+                'notes' => $consumption ? $consumption->notes : null,
+            ];
+
             $currentDate->addDay();
         }
 
-        // Calculate totals
-        $totalScheduled = $schedule 
-            ? (float) $schedule->total_daily_amount * count($dailyBreakdown)
+        // Calculate totals (scheduled = per-day amount × full period days)
+        $totalScheduled = $schedule
+            ? (float) $schedule->total_daily_amount * $daysInPeriod
             : 0;
         $totalConsumed = $consumptions->sum('feed_amount');
         $adherenceRate = $totalScheduled > 0 
@@ -201,6 +199,8 @@ class FeedingReportController extends Controller
         if ($schedule) {
             $feedingTimes = $schedule->feeding_times;
         }
+        // Number of feed slots (for default times when none set): 1-4 from schedule, or 0
+        $feedSlotsCount = count($feedingTimes);
 
         return [
             'cage_id' => $cage->id,
@@ -212,6 +212,7 @@ class FeedingReportController extends Controller
             'schedule_name' => $schedule ? $schedule->schedule_name : 'No Schedule',
             'feeding_frequency' => $schedule ? $schedule->frequency : null,
             'feeding_times' => $feedingTimes,
+            'feed_slots_count' => $feedSlotsCount,
             'total_scheduled' => $totalScheduled,
             'total_consumed' => $totalConsumed,
             'variance' => $totalConsumed - $totalScheduled,

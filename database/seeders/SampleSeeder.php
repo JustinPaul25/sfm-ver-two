@@ -26,9 +26,10 @@ class SampleSeeder extends Seeder
         $this->command->info('Creating comprehensive sample data for verification feature...');
 
         // First sample: Detected Fish Info — 2:10 PM January 29, 2026 (Stage: Grower, Width: 3.99 in, Length: 1.31 in, Weight: 13.95 g)
+        // Store as 06:10:20 UTC so it displays as 2:10 PM in UTC+8 (frontend converts UTC to local)
         $firstSampling = $samplings->where('date_sampling', '2026-01-29')->first();
         if ($firstSampling) {
-            $testedAt = '2026-01-29 14:10:20'; // 2:10 PM January 29, 2026
+            $testedAt = \Carbon\Carbon::create(2026, 1, 29, 6, 10, 20, 'UTC'); // 2:10 PM in UTC+8
             Sample::create([
                 'investor_id' => $firstSampling->investor_id,
                 'sampling_id' => $firstSampling->id,
