@@ -108,6 +108,11 @@ const chartOptions = ref({
                 font: {
                     size: 11,
                 },
+                stepSize: 1,
+                callback: function(value: any) {
+                    const n = Number(value);
+                    return Number.isInteger(n) ? n : '';
+                },
             },
             title: {
                 display: true,

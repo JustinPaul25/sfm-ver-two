@@ -2,7 +2,7 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
-import { ref, computed, watch } from 'vue';
+import { ref, computed } from 'vue';
 import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
@@ -29,11 +29,6 @@ const selectedPeriod = ref('30days');
 const customStartDate = ref('');
 const customEndDate = ref('');
 
-// Cage filter
-const selectedCageId = ref<string | null>(null);
-const cageSearch = ref('');
-const showCageDropdown = ref(false);
-
 const periods = [
     { value: 'day', label: 'Today' },
     { value: 'week', label: 'This Week' },
@@ -45,7 +40,6 @@ const periods = [
 // Analytics data
 const analytics = computed(() => props.analytics || {});
 const investor = computed(() => props.investor || {});
-const cages = computed(() => props.cages || []);
 const farmers = computed(() => props.farmers || []);
 
 // Summary cards data
@@ -99,10 +93,6 @@ function reloadDashboard() {
         params.end_date = customEndDate.value;
     }
     
-    if (selectedCageId.value) {
-        params.cage_no = selectedCageId.value;
-    }
-    
     router.get('/investor/dashboard', params, {
         preserveState: true,
         preserveScroll: true,
@@ -122,32 +112,6 @@ function formatNumber(num: number) {
 
 function formatWeight(weight: number) {
     return `${weight.toFixed(1)}g`;
-}
-
-// Filter cages based on search
-const filteredCages = computed(() => {
-    if (!cageSearch.value) {
-        return cages.value;
-    }
-    const search = cageSearch.value.toLowerCase();
-    return cages.value.filter(cage => 
-        cage.id?.toString().includes(search) ||
-        cage.number_of_fingerlings?.toString().includes(search) ||
-        cage.farmer_name?.toLowerCase().includes(search)
-    );
-});
-
-// Watch for cage changes to reload dashboard
-watch(selectedCageId, () => {
-    reloadDashboard();
-});
-
-// Close dropdowns when clicking outside
-function handleClickOutside(event: MouseEvent) {
-    const target = event.target as HTMLElement;
-    if (!target.closest('.cage-dropdown-container')) {
-        showCageDropdown.value = false;
-    }
 }
 </script>
 
@@ -224,44 +188,8 @@ function handleClickOutside(event: MouseEvent) {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Sampling Trends Chart -->
                 <Card class="p-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+                    <div class="mb-4">
                         <h3 class="text-lg font-semibold">Sampling Trends</h3>
-                        
-                        <!-- Cage Filter -->
-                        <div class="cage-dropdown-container">
-                            <div class="relative">
-                                <Input
-                                    v-model="cageSearch"
-                                    type="text"
-                                    :placeholder="selectedCageId ? `Cage ${selectedCageId}` : 'All Cages'"
-                                    class="w-full sm:w-40"
-                                    @focus="showCageDropdown = true"
-                                    @input="showCageDropdown = true"
-                                />
-                                <div 
-                                    v-if="showCageDropdown && (cageSearch || filteredCages.length > 0)"
-                                    class="absolute z-10 w-full sm:w-64 mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
-                                >
-                                    <button
-                                        type="button"
-                                        class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                        :class="{ 'bg-blue-50 dark:bg-blue-900/20': !selectedCageId }"
-                                        @click="selectedCageId = null; cageSearch = ''; showCageDropdown = false; reloadDashboard()"
-                                    >
-                                        <span class="font-medium">All Cages</span>
-                                    </button>
-                                    <div
-                                        v-for="cage in filteredCages"
-                                        :key="cage.id"
-                                        class="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
-                                        :class="{ 'bg-blue-50 dark:bg-blue-900/20': selectedCageId === cage.id.toString() }"
-                                        @click="selectedCageId = cage.id.toString(); cageSearch = `Cage ${cage.id}`; showCageDropdown = false; reloadDashboard()"
-                                    >
-                                        Cage {{ cage.id }} - {{ cage.farmer_name }} ({{ cage.number_of_fingerlings }} fingerlings)
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                     <SamplingTrendsChart :trends="analytics.sampling_trends || []" />
                 </Card>
