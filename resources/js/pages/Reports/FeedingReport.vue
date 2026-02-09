@@ -197,6 +197,82 @@ const formatDate = (dateStr: string) => {
   });
 };
 
+/** Format date as MM/DD/YYYY for print table */
+const formatDatePrint = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const y = d.getFullYear();
+  return `${m}/${day}/${y}`;
+};
+
+/** Format time for print table (e.g. "7am", "12pm"). Handles "HH:mm" (24h) and "Ham/pm". */
+const formatTimeSlot = (timeStr: string) => {
+  if (!timeStr) return '';
+  const s = String(timeStr).trim();
+  const lower = s.toLowerCase();
+  if (/^\d{1,2}(:\d{2})?\s*(am|pm)$/.test(lower)) return lower;
+  const m24 = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) {
+    const hour = parseInt(m24[1], 10);
+    const min = m24[2];
+    const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const ampm = hour >= 12 ? 'pm' : 'am';
+    return min === '00' ? `${h12}${ampm}` : `${h12}:${min}${ampm}`;
+  }
+  const match = s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const min = match[2] ? `:${match[2]}` : '';
+    const ampm = (match[3] || (hour >= 12 ? 'pm' : 'am')).toLowerCase();
+    const h = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    return `${h}${min}${ampm}`;
+  }
+  return s;
+};
+
+/** Flatten report data into rows for print table: Date | Cage # | Feed Amount | Time | Time | Time */
+interface PrintTableRow {
+  date: string;
+  cageNumber: number;
+  feedAmountKg: number;
+  time1: string;
+  time2: string;
+  time3: string;
+}
+
+const printTableRows = computed(() => {
+  const rows: PrintTableRow[] = [];
+  for (const cage of reportData.value) {
+    for (const day of cage.daily_breakdown) {
+      const times = (cage.feeding_times || []).slice(0, 3);
+      rows.push({
+        date: day.date,
+        cageNumber: cage.cage_number,
+        feedAmountKg: day.actual_amount,
+        time1: times[0] ? formatTimeSlot(times[0]) : '',
+        time2: times[1] ? formatTimeSlot(times[1]) : '',
+        time3: times[2] ? formatTimeSlot(times[2]) : '',
+      });
+    }
+  }
+  rows.sort((a, b) => {
+    const d = a.date.localeCompare(b.date);
+    return d !== 0 ? d : a.cageNumber - b.cageNumber;
+  });
+  return rows;
+});
+
+/** For each date, how many rows share it (for rowSpan) */
+const printTableDateSpans = computed(() => {
+  const spans: Record<string, number> = {};
+  for (const row of printTableRows.value) {
+    spans[row.date] = (spans[row.date] || 0) + 1;
+  }
+  return spans;
+});
+
+
 const resetFilters = () => {
   setDefaultDates();
   selectedInvestor.value = '';
@@ -265,7 +341,7 @@ onMounted(() => {
   <AppLayout>
     <Head title="Weekly Feeding Report" />
 
-    <div class="flex flex-col gap-6 p-4 max-w-7xl mx-auto print:p-2">
+    <div class="flex flex-col gap-6 p-4 w-full print:p-2">
       <!-- Header -->
       <div class="flex items-center justify-between print:hidden">
         <div>
@@ -354,80 +430,84 @@ onMounted(() => {
         </CardContent>
       </Card>
 
-      <!-- Summary Stats -->
+      <!-- Summary: Report period + stats table -->
       <div v-if="reportData.length > 0">
-        <div class="mb-4">
-          <h2 class="text-xl font-semibold mb-2">Report Period</h2>
-          <p class="text-muted-foreground">
-            {{ formatDate(period.start_date) }} - {{ formatDate(period.end_date) }} 
+        <div class="mb-2">
+          <h2 class="text-base font-semibold mb-0.5">Report Period</h2>
+          <p class="text-muted-foreground text-sm">
+            {{ formatDate(period.start_date) }} - {{ formatDate(period.end_date) }}
             ({{ Math.round(period.days_count) }} days)
           </p>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>Total Cages</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold">{{ summary.total_cages }}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>With Schedules</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold text-blue-600">{{ summary.cages_with_schedules }}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>Active Schedules</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold text-green-600">{{ summary.active_schedules }}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>Total Scheduled</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold">{{ summary.total_scheduled_feed.toFixed(2) }}</div>
-              <div class="text-xs text-muted-foreground">kg</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>Total Consumed</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold">{{ summary.total_feed_consumed.toFixed(2) }}</div>
-              <div class="text-xs text-muted-foreground">kg</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="pb-2">
-              <CardDescription>Avg Adherence</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div class="text-2xl font-bold" :class="summary.average_adherence >= 90 ? 'text-green-600' : summary.average_adherence >= 70 ? 'text-yellow-600' : 'text-red-600'">
-                {{ summary.average_adherence }}%
-              </div>
-            </CardContent>
-          </Card>
+        <div class="overflow-x-auto rounded-md border border-border">
+          <table class="w-full border-collapse text-sm">
+            <thead>
+              <tr class="bg-muted/50">
+                <th class="px-4 py-2 text-left font-medium border-b border-border">Total Cages</th>
+                <th class="px-4 py-2 text-left font-medium border-b border-border">With Schedules</th>
+                <th class="px-4 py-2 text-left font-medium border-b border-border">Active Schedules</th>
+                <th class="px-4 py-2 text-left font-medium border-b border-border">Total Scheduled</th>
+                <th class="px-4 py-2 text-left font-medium border-b border-border">Total Consumed</th>
+                <th class="px-4 py-2 text-left font-medium border-b border-border">Avg Adherence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="px-4 py-2 border-b border-border font-semibold">{{ summary.total_cages }}</td>
+                <td class="px-4 py-2 border-b border-border font-semibold text-blue-600">{{ summary.cages_with_schedules }}</td>
+                <td class="px-4 py-2 border-b border-border font-semibold text-green-600">{{ summary.active_schedules }}</td>
+                <td class="px-4 py-2 border-b border-border font-semibold">{{ summary.total_scheduled_feed.toFixed(2) }} kg</td>
+                <td class="px-4 py-2 border-b border-border font-semibold">{{ summary.total_feed_consumed.toFixed(2) }} kg</td>
+                <td class="px-4 py-2 border-b border-border font-semibold" :class="summary.average_adherence >= 90 ? 'text-green-600' : summary.average_adherence >= 70 ? 'text-yellow-600' : 'text-red-600'">
+                  {{ summary.average_adherence }}%
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <Separator class="my-6" />
+        <Separator class="my-4" />
 
-        <!-- Cage Reports -->
-        <div class="space-y-4">
+        <!-- Print-only: Weekly feeding table (compact) -->
+        <div class="hidden print:block my-3">
+          <h2 class="text-base font-bold mb-2">Weekly Feeding Report</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-xs" style="border: 1px solid #e5e7eb;">
+              <thead>
+                <tr style="background: #f3f4f6;">
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Date</th>
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Cage #</th>
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Feed Amount</th>
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Time</th>
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Time</th>
+                  <th style="border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left;">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-for="(row, idx) in printTableRows" :key="`${row.date}-${row.cageNumber}-${idx}`">
+                  <tr>
+                    <td
+                      v-if="idx === 0 || printTableRows[idx - 1].date !== row.date"
+                      :rowspan="printTableDateSpans[row.date]"
+                      style="border: 1px solid #e5e7eb; padding: 4px 8px; vertical-align: top;"
+                    >
+                      {{ formatDatePrint(row.date) }}
+                    </td>
+                    <td style="border: 1px solid #e5e7eb; padding: 4px 8px;">{{ row.cageNumber }}</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 4px 8px;">{{ row.feedAmountKg }}kg</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 4px 8px;">{{ row.time1 || '' }}</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 4px 8px;">{{ row.time2 || '' }}</td>
+                    <td style="border: 1px solid #e5e7eb; padding: 4px 8px;">{{ row.time3 || '' }}</td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Cage Reports (hidden when printing) -->
+        <div class="space-y-4 print:hidden">
           <h2 class="text-2xl font-bold">Cage Details</h2>
 
           <Card v-for="cage in reportData" :key="cage.cage_id" class="overflow-hidden">

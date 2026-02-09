@@ -27,6 +27,17 @@ class SamplingSeeder extends Seeder
         $validCages = $cages->filter(function($cage) use ($investors) {
             return $investors->contains('id', $cage->investor_id);
         })->values();
+
+        // Create the first sampling: Detected Fish Info — 2:10 PM January 29, 2026
+        $firstCage = $validCages->first();
+        Sampling::create([
+            'investor_id' => $firstCage->investor_id,
+            'cage_no' => $firstCage->id,
+            'date_sampling' => '2026-01-29',
+            'doc' => 'DOC-20260129-00',
+            'mortality' => 0,
+            'feed_types_id' => $firstCage->feed_types_id,
+        ]);
         
         $this->command->info('Creating comprehensive historical sampling data for verification feature testing...');
         

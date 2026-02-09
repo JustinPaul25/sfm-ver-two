@@ -24,16 +24,32 @@ class SampleSeeder extends Seeder
         }
 
         $this->command->info('Creating comprehensive sample data for verification feature...');
+
+        // First sample: Detected Fish Info — 2:10 PM January 29, 2026 (Stage: Grower, Width: 3.99 in, Length: 1.31 in, Weight: 13.95 g)
+        $firstSampling = $samplings->where('date_sampling', '2026-01-29')->first();
+        if ($firstSampling) {
+            $testedAt = '2026-01-29 14:10:20'; // 2:10 PM January 29, 2026
+            Sample::create([
+                'investor_id' => $firstSampling->investor_id,
+                'sampling_id' => $firstSampling->id,
+                'sample_no' => 1,
+                'weight' => 13.95,
+                'length' => round(1.31 * 2.54, 2),   // 1.31 in → cm
+                'width' => round(3.99 * 2.54, 2),    // 3.99 in → cm
+                'created_at' => $testedAt,
+                'updated_at' => $testedAt,
+            ]);
+        }
         
         // Track fish growth progression by cage for realistic trends
         $cageGrowthData = [];
         
-        // Group samplings by cage and sort by date to track growth progression
+        // Group samplings by cage and sort by date to track growth progression (exclude the fixed 2026-01-29 sampling from bulk generation)
         $samplingsByCage = $samplings->groupBy('cage_no')->map(function ($group) {
             return $group->sortBy('date_sampling');
         });
         
-        $sampleCount = 0;
+        $sampleCount = Sample::count();
         
         // Create samples for each sampling with realistic growth progression
         foreach ($samplingsByCage as $cageId => $cageSamplings) {
@@ -52,6 +68,10 @@ class SampleSeeder extends Seeder
             $growthRate = $cageGrowthData[$cageId]['growth_rate'];
             
             foreach ($cageSamplings as $sampling) {
+                // Skip the fixed first sampling (2026-01-29) — it already has one sample
+                if ($sampling->date_sampling === '2026-01-29') {
+                    continue;
+                }
                 // Calculate days since start
                 $daysElapsed = abs(\Carbon\Carbon::parse($startDate)->diffInDays($sampling->date_sampling));
                 
