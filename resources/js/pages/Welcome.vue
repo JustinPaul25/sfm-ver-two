@@ -32,10 +32,9 @@ import { Head, Link } from '@inertiajs/vue3';
                 <div
                     class="flex-1 rounded-bl-lg rounded-br-lg bg-white p-6 pb-12 text-[13px] leading-[20px] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:bg-[#161615] dark:text-[#EDEDEC] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] lg:rounded-br-none lg:rounded-tl-lg lg:p-20"
                 >
-                    <h1 class="mb-1 font-medium text-2xl">Automated Fish Morphometrics System</h1>
+                    <h1 class="mb-1 font-medium text-2xl">SMART FISH MEASUREMENT SYSTEM:</h1>
                     <p class="mb-2 text-[#706f6c] dark:text-[#A1A09A]">
-                        Our cutting-edge image processing technology revolutionizes fish measurement and morphological analysis. This non-invasive system precisely captures key metrics of Nile tilapia in real-time, eliminating the stress and errors of traditional manual methods.
-Designed for both commercial aquaculture operations and educational settings, our solution delivers instant, accurate data on fish growth, health, and development—enhancing productivity, research quality, and sustainable fisheries management.
+                        A computer vision-based web application for automated oreochromis niloticus langth and weight estimation.
                     </p>
                     <ul class="flex gap-3 text-sm leading-normal">
                         <li>
