@@ -187,10 +187,30 @@ export function useFishDetection() {
     error.value = null;
     
     try {
-      // Ensure model is loaded
-      await loadWeightPredictionModel();
+      // Resolve dimensions: for video use videoWidth/videoHeight (element.width can be 0 before ready)
+      const isVideo = imageElement instanceof HTMLVideoElement;
+      const imageWidth = isVideo
+        ? (imageElement as HTMLVideoElement).videoWidth
+        : (imageElement as HTMLImageElement).width || (imageElement as HTMLCanvasElement).width;
+      const imageHeight = isVideo
+        ? (imageElement as HTMLVideoElement).videoHeight
+        : (imageElement as HTMLImageElement).height || (imageElement as HTMLCanvasElement).height;
+      const w = imageWidth || 1280;
+      const h = imageHeight || 720;
+
+      if (w === 0 || h === 0) {
+        error.value = 'Video or image not ready. Wait for the feed to load and try again.';
+        return [];
+      }
+
+      // Try to load weight prediction model (optional; detection still works with formula fallback)
+      try {
+        await loadWeightPredictionModel();
+      } catch (modelErr) {
+        console.warn('Weight model not available, using formula fallback:', modelErr);
+      }
       
-      // Convert image to tensor
+      // Convert image to tensor (only if we have valid dimensions)
       const tensor = tf.browser.fromPixels(imageElement);
       
       // Preprocess: Resize to YOLO input size (typically 640x640)
@@ -203,10 +223,7 @@ export function useFishDetection() {
       // Since we don't have the .pt file converted to TensorFlow.js format,
       // we'll simulate detection using color-based or contour-based detection
       
-      const imageWidth = (imageElement as HTMLImageElement).width || (imageElement as HTMLVideoElement).videoWidth || 1280;
-      const imageHeight = (imageElement as HTMLImageElement).height || (imageElement as HTMLVideoElement).videoHeight || 720;
-      
-      const detections = await performSimpleDetection(imageElement, calibration, imageWidth, imageHeight);
+      const detections = await performSimpleDetection(imageElement, calibration, w, h);
       
       // Cleanup tensors
       tensor.dispose();
@@ -232,16 +249,18 @@ export function useFishDetection() {
     imageWidth: number,
     imageHeight: number
   ): Promise<DetectionResult[]> => {
+    if (imageWidth <= 0 || imageHeight <= 0) return [];
+    
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) return [];
     
-    // Set canvas size
-    canvas.width = imageElement.width || (imageElement as HTMLVideoElement).videoWidth;
-    canvas.height = imageElement.height || (imageElement as HTMLVideoElement).videoHeight;
+    // Use passed dimensions so video/canvas size is correct (element.width can be 0 for video)
+    canvas.width = imageWidth;
+    canvas.height = imageHeight;
     
     // Draw image
-    ctx.drawImage(imageElement, 0, 0);
+    ctx.drawImage(imageElement, 0, 0, imageWidth, imageHeight);
     
     // Get image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -252,7 +271,8 @@ export function useFishDetection() {
     const detections: DetectionResult[] = [];
     
     // For demonstration, detect dark regions (fish bodies are usually darker)
-    const threshold = 100;
+    const threshold = 120;
+    const minDarkPixels = Math.min(500, (canvas.width * canvas.height) * 0.002); // at least 0.2% of image or 500 px
     let minX = canvas.width;
     let minY = canvas.height;
     let maxX = 0;
@@ -278,7 +298,7 @@ export function useFishDetection() {
     }
     
     // If we found a significant dark region, create a detection
-    if (fishPixels > 1000) {
+    if (fishPixels > minDarkPixels) {
       const pixelWidth = maxX - minX;
       const pixelLength = maxY - minY;
       

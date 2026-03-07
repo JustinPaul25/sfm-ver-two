@@ -31,6 +31,7 @@ const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const stream = ref<MediaStream | null>(null);
 const isStreaming = ref(false);
+const videoReady = ref(false);
 const detectionInterval = ref<number | null>(null);
 const lastDetection = ref<Detection | null>(null);
 const detectionHistory = ref<Detection[]>([]);
@@ -71,10 +72,20 @@ const startCamera = async () => {
       videoRef.value.play();
       isStreaming.value = true;
 
-      // Wait for video to be ready
-      await new Promise((resolve) => {
+      // Wait for video to be ready (metadata and dimensions)
+      await new Promise<void>((resolve) => {
         if (videoRef.value) {
-          videoRef.value.onloadedmetadata = resolve;
+          const onReady = () => {
+            if (videoRef.value && videoRef.value.videoWidth > 0 && videoRef.value.videoHeight > 0) {
+              videoReady.value = true;
+              resolve();
+            }
+          };
+          videoRef.value.onloadedmetadata = onReady;
+          videoRef.value.onloadeddata = onReady;
+          if (videoRef.value.videoWidth > 0) onReady();
+        } else {
+          resolve();
         }
       });
 
@@ -108,6 +119,7 @@ const stopCamera = () => {
 
   stopAutoDetection();
   isStreaming.value = false;
+  videoReady.value = false;
 };
 
 const startAutoDetection = () => {
@@ -230,7 +242,7 @@ defineExpose({
               @click="captureFrame"
               variant="secondary"
               size="sm"
-              :disabled="isDetecting"
+              :disabled="isDetecting || !videoReady"
             >
               📸 Capture & Detect
             </Button>
@@ -271,6 +283,13 @@ defineExpose({
             class="absolute top-4 right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse"
           >
             🔍 Detecting...
+          </div>
+          <!-- Detection error from composable -->
+          <div
+            v-if="detectionError && isStreaming"
+            class="absolute bottom-4 left-4 right-4 bg-amber-500/90 text-white px-3 py-2 rounded text-sm"
+          >
+            {{ detectionError }}
           </div>
         </div>
       </CardContent>
