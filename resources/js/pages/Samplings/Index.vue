@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useSamplingStore } from '@/Stores/SamplingStore';
 import { useInvestorStore } from '@/Stores/InvestorStore';
@@ -321,9 +321,16 @@ watch(() => editSampling.value?.investor_id, (newInvestorId) => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
   store.fetchSamplings();
   investorStore.fetchInvestorsSelect();
+
+  const toEdit = (page.props as { samplingToEdit?: Sampling | null }).samplingToEdit;
+  if (toEdit?.id && !isInvestor.value) {
+    openEditDialog(toEdit);
+    await nextTick();
+    window.history.replaceState({}, '', route('samplings.index'));
+  }
 });
 </script>
 

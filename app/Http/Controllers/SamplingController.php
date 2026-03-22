@@ -15,7 +15,42 @@ class SamplingController extends Controller
 {
     public function index(Request $request)
     {
-        return Inertia::render('Samplings/Index');
+        $samplingToEdit = null;
+        if ($request->filled('edit')) {
+            $editId = (int) $request->get('edit');
+            $user = $request->user();
+            if ($user && ! $user->isInvestor() && $editId > 0) {
+                $samplingQuery = Sampling::with('investor')
+                    ->whereKey($editId)
+                    ->whereHas('investor', function ($q) {
+                        $q->whereNull('deleted_at');
+                    });
+                if ($user->isFarmer()) {
+                    $samplingQuery->whereHas('cage', function ($q) use ($user) {
+                        $q->where('farmer_id', $user->id);
+                    });
+                }
+                $s = $samplingQuery->first();
+                if ($s) {
+                    $samplingToEdit = [
+                        'id' => $s->id,
+                        'investor_id' => $s->investor_id,
+                        'date_sampling' => $s->date_sampling,
+                        'doc' => $s->doc,
+                        'cage_no' => $s->cage_no,
+                        'mortality' => $s->mortality ?? 0,
+                        'investor' => $s->investor ? [
+                            'id' => $s->investor->id,
+                            'name' => $s->investor->name,
+                        ] : null,
+                    ];
+                }
+            }
+        }
+
+        return Inertia::render('Samplings/Index', [
+            'samplingToEdit' => $samplingToEdit,
+        ]);
     }
 
     public function list(Request $request)
@@ -264,9 +299,9 @@ class SamplingController extends Controller
                 
                 // Calculate average length and width from samples (all fish in one cage are sized at the same time)
                 $avgLength = $samples->whereNotNull('length')->count() > 0 
-                    ? round($samples->whereNotNull('length')->avg('length'), 1) : null;
+                    ? round($samples->whereNotNull('length')->avg('length'), 2) : null;
                 $avgWidth = $samples->whereNotNull('width')->count() > 0 
-                    ? round($samples->whereNotNull('width')->avg('width'), 1) : null;
+                    ? round($samples->whereNotNull('width')->avg('width'), 2) : null;
                 
                 // Get feed type name from sampling (preferred) or from cage
                 $feedTypeName = null;
@@ -404,10 +439,12 @@ class SamplingController extends Controller
                 $reportData = [
                     'sampling' => [
                         'id' => $sampling->id,
+                        'investor_id' => $sampling->investor_id,
                         'date' => $sampling->date_sampling,
                         'investor' => $sampling->investor->name,
                         'cageNo' => $sampling->cage_no,
                         'doc' => $sampling->doc,
+                        'mortality' => $sampling->mortality ?? 0,
                         'created_at' => $sampling->created_at,
                         'updated_at' => $sampling->updated_at,
                     ],
@@ -478,6 +515,105 @@ class SamplingController extends Controller
             'samples_count' => 5,
             'sampling_id' => $sampling->id
         ]);
+    }
+
+    /**
+     * Ensure sample rows 1–5 exist (weight 0) so past data can be entered from the report UI.
+     */
+    public function ensureSampleSlots(Request $request, Sampling $sampling)
+    {
+        if (! $this->userCanEditSamplingReport($request, $sampling)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $desiredSampleCount = 5;
+        $existingSampleNos = Sample::where('sampling_id', $sampling->id)
+            ->pluck('sample_no')
+            ->map(fn ($no) => (int) $no)
+            ->toArray();
+
+        for ($i = 1; $i <= $desiredSampleCount; $i++) {
+            if (! in_array($i, $existingSampleNos, true)) {
+                Sample::create([
+                    'investor_id' => $sampling->investor_id,
+                    'sampling_id' => $sampling->id,
+                    'sample_no' => (string) $i,
+                    'weight' => 0,
+                ]);
+            }
+        }
+
+        $samples = Sample::where('sampling_id', $sampling->id)
+            ->orderByRaw('CAST(sample_no AS UNSIGNED) ASC')
+            ->get();
+
+        return response()->json([
+            'message' => 'Sample slots ready',
+            'samples' => $samples,
+        ]);
+    }
+
+    /**
+     * Update mortality and/or per-sample measurements from the sampling report screen.
+     */
+    public function updateReportSamples(Request $request, Sampling $sampling)
+    {
+        if (! $this->userCanEditSamplingReport($request, $sampling)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'mortality' => 'nullable|integer|min:0',
+            'samples' => 'required|array|min:1',
+            'samples.*.id' => 'required|integer|exists:samples,id',
+            'samples.*.weight' => 'nullable|numeric|min:0',
+            'samples.*.length' => 'nullable|numeric|min:0',
+            'samples.*.width' => 'nullable|numeric|min:0',
+        ]);
+
+        if ($request->has('mortality')) {
+            $sampling->update(['mortality' => $request->input('mortality')]);
+        }
+
+        foreach ($request->input('samples') as $row) {
+            $sample = Sample::where('id', $row['id'])
+                ->where('sampling_id', $sampling->id)
+                ->firstOrFail();
+
+            $weight = isset($row['weight']) ? (float) $row['weight'] : 0;
+            $length = array_key_exists('length', $row) && $row['length'] !== null && $row['length'] !== ''
+                ? round((float) $row['length'], 2) : null;
+            $width = array_key_exists('width', $row) && $row['width'] !== null && $row['width'] !== ''
+                ? round((float) $row['width'], 2) : null;
+
+            $sample->update([
+                'weight' => round($weight, 3),
+                'length' => $length,
+                'width' => $width,
+            ]);
+        }
+
+        return response()->json(['message' => 'Sampling data saved successfully']);
+    }
+
+    private function userCanEditSamplingReport(Request $request, Sampling $sampling): bool
+    {
+        $user = $request->user();
+        if (! $user || $user->isInvestor()) {
+            return false;
+        }
+        $sampling->loadMissing('investor');
+        if (! $sampling->investor || $sampling->investor->trashed()) {
+            return false;
+        }
+        if ($user->isFarmer()) {
+            $cage = $sampling->cage;
+            if (! $cage || $cage->farmer_id !== $user->id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function exportReport(Request $request, $samplingId = null)
@@ -659,10 +795,10 @@ class SamplingController extends Controller
         $totalWeight = $samples->sum('weight');
         $totalSamples = $samples->count();
         $avgWeight = $totalSamples > 0 ? round($totalWeight / $totalSamples, 2) : 0;
-        $avgLength = $samples->whereNotNull('length')->count() > 0 
-            ? round($samples->whereNotNull('length')->avg('length'), 1) : null;
-        $avgWidth = $samples->whereNotNull('width')->count() > 0 
-            ? round($samples->whereNotNull('width')->avg('width'), 1) : null;
+        $avgLength = $samples->whereNotNull('length')->count() > 0
+            ? round($samples->whereNotNull('length')->avg('length'), 2) : null;
+        $avgWidth = $samples->whereNotNull('width')->count() > 0
+            ? round($samples->whereNotNull('width')->avg('width'), 2) : null;
         
         // Get feed type name from sampling (preferred) or from cage
         $feedTypeName = null;

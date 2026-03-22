@@ -77,6 +77,7 @@ class DocsController extends Controller
             'height' => 'required|numeric|min:0',
             'width' => 'required|numeric|min:0',
             'doc' => 'required|exists:samplings,doc',
+            'unit' => 'nullable|string|in:cm,in',
         ];
 
         $validator = Validator::make($request->all(), $rules);
@@ -85,13 +86,25 @@ class DocsController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Normalize to centimetres. Devices (e.g. YOLO bbox) often send inches via `unit=in`.
+        // Map longer axis → standard length, shorter → body width (fixes bbox orientation vs. fish axes).
+        $heightRaw = (float) $request->input('height');
+        $widthRaw = (float) $request->input('width');
+        $unit = strtolower((string) $request->input('unit', 'cm'));
+        if ($unit === 'in') {
+            $heightRaw *= 2.54;
+            $widthRaw *= 2.54;
+        }
+        $lengthCm = max($heightRaw, $widthRaw);
+        $widthCm = min($heightRaw, $widthRaw);
+
         // Convert measurements to weight using the formula from the reference
         // Formula: weight = (width * (height^2)) / 690
-        // Convert cm to inches: 1 cm = 0.3937 inches
+        // Inputs must be cm; convert cm to inches: 1 cm = 0.3937 inches
         // Multiply by 453.592 to convert pounds to grams
-        $height = ($request->input('height') * 0.3937) * 1.9;
-        $width = $request->input('width') * 0.3937;
-        $weight = ($width * ($height * $height)) / 690;
+        $heightIn = ($lengthCm * 0.3937) * 1.9;
+        $widthIn = $widthCm * 0.3937;
+        $weight = ($widthIn * ($heightIn * $heightIn)) / 690;
         $final_weight = $weight * 453.592;
 
         // Find the sampling using DOC instead of ID
@@ -136,15 +149,11 @@ class DocsController extends Controller
 
         DB::beginTransaction();
         try {
-            // Get original height and width values (in cm) from request
-            $originalHeight = $request->input('height'); // This is length in cm
-            $originalWidth = $request->input('width'); // This is width in cm
-            
-            // Update the current sample with calculated weight, length, and width
+            // Persist standard length (longer axis) and width (shorter), in cm, 2 d.p.
             $current_sample->update([
                 'weight' => round($final_weight, 3),
-                'length' => round($originalHeight, 2), // Save height as length in cm
-                'width' => round($originalWidth, 2),  // Save width in cm
+                'length' => round($lengthCm, 2),
+                'width' => round($widthCm, 2),
             ]);
 
             // Recalculate statistics for the sampling

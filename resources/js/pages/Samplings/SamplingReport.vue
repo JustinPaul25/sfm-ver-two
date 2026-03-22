@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
-import { ref, computed, onMounted } from 'vue';
+import Input from '@/components/ui/input/Input.vue';
+import Label from '@/components/ui/label/Label.vue';
+import { ref, computed } from 'vue';
 import axios from 'axios';
 import FishDetectionCamera from '@/components/FishDetectionCamera.vue';
 import Dialog from '@/components/ui/dialog/Dialog.vue';
@@ -11,6 +13,10 @@ import DialogContent from '@/components/ui/dialog/DialogContent.vue';
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue';
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue';
 import DialogTrigger from '@/components/ui/dialog/DialogTrigger.vue';
+import DialogFooter from '@/components/ui/dialog/DialogFooter.vue';
+import Swal from 'sweetalert2';
+import { route } from 'ziggy-js';
+import { type SharedData } from '@/types';
 
 // Props from Inertia
 const props = defineProps<{
@@ -20,6 +26,86 @@ const props = defineProps<{
   totals?: any;
   history?: any[];
 }>();
+
+const page = usePage<SharedData>();
+const isInvestor = computed(() => page.props.auth?.user?.role === 'investor');
+
+const showEditSamplesDialog = ref(false);
+const editSamplesSaving = ref(false);
+const editSamplesLoading = ref(false);
+const editMortality = ref(0);
+const editSampleRows = ref<
+  { id: number; sample_no: string | number; weight: string; length: string; width: string }[]
+>([]);
+
+function mapSamplesToEditRows(samples: any[]) {
+  return [...samples]
+    .sort((a, b) => (Number(a.sample_no) || 0) - (Number(b.sample_no) || 0))
+    .map((s: any) => ({
+      id: s.id,
+      sample_no: s.sample_no,
+      weight: s.weight > 0 ? String(s.weight) : '',
+      length: s.length != null && s.length !== '' ? String(s.length) : '',
+      width: s.width != null && s.width !== '' ? String(s.width) : '',
+    }));
+}
+
+async function openEditSamplesDialog() {
+  const id = props.sampling?.id;
+  if (!id || isInvestor.value) return;
+  editSamplesLoading.value = true;
+  try {
+    let rowsSource = props.samples || [];
+    if (!rowsSource.length) {
+      const { data } = await axios.post(route('samplings.ensure-sample-slots', id));
+      rowsSource = data.samples || [];
+    }
+    editSampleRows.value = mapSamplesToEditRows(rowsSource);
+    editMortality.value = props.sampling?.mortality ?? 0;
+    showEditSamplesDialog.value = true;
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Could not prepare sample editor.';
+    await Swal.fire({ icon: 'error', title: 'Error', text: msg });
+  } finally {
+    editSamplesLoading.value = false;
+  }
+}
+
+async function saveEditSamples() {
+  const id = props.sampling?.id;
+  if (!id || !editSampleRows.value.length) return;
+  editSamplesSaving.value = true;
+  try {
+    const mortalityVal = Number(editMortality.value);
+    await axios.patch(route('samplings.update-report-samples', id), {
+      mortality: Number.isFinite(mortalityVal) ? Math.max(0, Math.floor(mortalityVal)) : 0,
+      samples: editSampleRows.value.map((row) => ({
+        id: row.id,
+        weight: row.weight === '' ? 0 : Math.max(0, parseFloat(row.weight) || 0),
+        length: row.length === '' ? null : parseFloat(row.length),
+        width: row.width === '' ? null : parseFloat(row.width),
+      })),
+    });
+    showEditSamplesDialog.value = false;
+    await Swal.fire({ icon: 'success', title: 'Saved', text: 'Sampling measurements were updated.' });
+    router.reload({
+      only: ['sampling', 'cageEntry', 'samples', 'totals', 'history'],
+    });
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Failed to save.';
+    const errors = e?.response?.data?.errors;
+    const detail = errors ? Object.values(errors).flat().join(' ') : msg;
+    await Swal.fire({ icon: 'error', title: 'Error', text: detail });
+  } finally {
+    editSamplesSaving.value = false;
+  }
+}
+
+function goToEditSamplingSession() {
+  const id = props.sampling?.id;
+  if (!id) return;
+  router.visit(`${route('samplings.index')}?edit=${encodeURIComponent(String(id))}`);
+}
 
 // Helper function to format timestamp in a human-readable way (reuse from existing function)
 const formatSamplingTimestamp = (timestamp: string | null | undefined): string => {
@@ -71,6 +157,13 @@ const roundToTenth = (value: number | string | undefined): number => {
   return Math.round(num * 10) / 10;
 };
 
+const roundToHundredth = (value: number | string | undefined): number | null => {
+  if (value === undefined || value === null || value === '') return null;
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return null;
+  return Math.round(num * 100) / 100;
+};
+
 // Helper function to format timestamp in a human-readable way
 const formatTimestamp = (timestamp: string | null | undefined): string => {
   if (!timestamp) return '-';
@@ -105,8 +198,8 @@ const organizedSamples = computed(() => {
   return sortedSamples.map(sample => ({
     no: sample.sample_no || '',
     weight: roundToTenth(sample.weight),
-    length: sample.length ? roundToTenth(sample.length) : null,
-    width: sample.width ? roundToTenth(sample.width) : null,
+    length: roundToHundredth(sample.length),
+    width: roundToHundredth(sample.width),
     type: tooltipData.value.type,
     // Only show tested_at if the sample has actual weight data (has been tested)
     testedAt: sample.weight ? formatTimestamp(sample.created_at) : null,
@@ -176,8 +269,8 @@ const tooltipData = computed(() => {
   
   return {
     avgWeight: roundToTenth(avgWeight),
-    avgLength: avgLength ? roundToTenth(avgLength) : null,
-    avgWidth: avgWidth ? roundToTenth(avgWidth) : null,
+    avgLength: avgLength != null ? roundToHundredth(avgLength) : null,
+    avgWidth: avgWidth != null ? roundToHundredth(avgWidth) : null,
     type: props.cageEntry?.type || 'N/A'
   };
 });
@@ -252,8 +345,8 @@ const aiAverages = computed(() => {
   const count = aiPredictions.value.length;
   
   return {
-    length: (total.length / count).toFixed(1),
-    width: (total.width / count).toFixed(1),
+    length: (total.length / count).toFixed(2),
+    width: (total.width / count).toFixed(2),
     weight: (total.weight / count).toFixed(1),
     count,
   };
@@ -281,9 +374,17 @@ const aiAverages = computed(() => {
           </div>
         </div>
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900 mb-6">
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <Button variant="outline" @click="printReport">🖨️ Print Report</Button>
             <Button variant="secondary" @click="exportToExcel">📊 Export to Excel</Button>
+            <Button
+              v-if="props.sampling?.id && !isInvestor"
+              variant="outline"
+              :disabled="editSamplesLoading"
+              @click="openEditSamplesDialog"
+            >
+              ✏️ Edit data
+            </Button>
             <Dialog v-model:open="showDetectionDialog">
               <DialogTrigger as-child>
                 <Button variant="default" @click="openDetectionCamera">🤖 AI Fish Detection</Button>
@@ -304,6 +405,70 @@ const aiAverages = computed(() => {
             </Dialog>
           </div>
         </div>
+
+        <Dialog v-model:open="showEditSamplesDialog">
+          <DialogContent class="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit sampling data</DialogTitle>
+            </DialogHeader>
+            <p class="text-sm text-muted-foreground mb-4">
+              Enter or correct fish weights and measurements for this session. To change the sampling date, cage, or investor, use
+              <button
+                type="button"
+                class="text-primary underline underline-offset-2 font-medium"
+                @click="goToEditSamplingSession"
+              >
+                edit session on the Samplings list
+              </button>
+              .
+            </p>
+            <div class="flex flex-col gap-4">
+              <div class="flex flex-col gap-2 max-w-xs">
+                <Label for="edit-report-mortality">Mortality (pcs)</Label>
+                <Input
+                  id="edit-report-mortality"
+                  v-model.number="editMortality"
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                />
+              </div>
+              <div class="overflow-x-auto rounded-lg border border-sidebar-border/70">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-muted/50">
+                    <tr>
+                      <th class="px-3 py-2 text-left">No.</th>
+                      <th class="px-3 py-2 text-left">Weight (g)</th>
+                      <th class="px-3 py-2 text-left">Length (cm)</th>
+                      <th class="px-3 py-2 text-left">Width (cm)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in editSampleRows" :key="row.id" class="border-t border-border">
+                      <td class="px-3 py-2 align-middle">{{ row.sample_no }}</td>
+                      <td class="px-3 py-2">
+                        <Input v-model="row.weight" type="number" step="any" min="0" class="h-9" placeholder="—" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <Input v-model="row.length" type="number" step="any" min="0" class="h-9" placeholder="—" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <Input v-model="row.width" type="number" step="any" min="0" class="h-9" placeholder="—" />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <DialogFooter class="mt-6 flex flex-row flex-wrap gap-2 sm:justify-end">
+              <Button type="button" variant="secondary" @click="showEditSamplesDialog = false">Cancel</Button>
+              <Button type="button" :disabled="editSamplesSaving || !editSampleRows.length" @click="saveEditSamples">
+                {{ editSamplesSaving ? 'Saving…' : 'Save' }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <!-- Average Data Block -->
         <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
           <h3 class="font-semibold mb-3 text-blue-900 dark:text-blue-100">Average Data</h3>
@@ -314,11 +479,11 @@ const aiAverages = computed(() => {
             </div>
             <div v-if="tooltipData.avgLength">
               <div class="text-sm text-blue-700 dark:text-blue-300">Length</div>
-              <div class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ tooltipData.avgLength.toFixed(1) }} cm</div>
+              <div class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ tooltipData.avgLength != null ? tooltipData.avgLength.toFixed(2) : '—' }} cm</div>
             </div>
             <div v-if="tooltipData.avgWidth">
               <div class="text-sm text-blue-700 dark:text-blue-300">Width</div>
-              <div class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ tooltipData.avgWidth.toFixed(1) }} cm</div>
+              <div class="text-lg font-bold text-blue-900 dark:text-blue-100">{{ tooltipData.avgWidth != null ? tooltipData.avgWidth.toFixed(2) : '—' }} cm</div>
             </div>
             <div>
               <div class="text-sm text-blue-700 dark:text-blue-300">Type</div>
@@ -366,8 +531,8 @@ const aiAverages = computed(() => {
               <tr v-for="row in organizedSamples" :key="row.no" class="border-b border-gray-200 dark:border-gray-700">
                 <td class="px-4 py-2">{{ row.no }}</td>
                 <td class="px-4 py-2">{{ row.weight ? row.weight.toFixed(1) : '' }}</td>
-                <td class="px-4 py-2">{{ row.length ? row.length.toFixed(1) : '-' }}</td>
-                <td class="px-4 py-2">{{ row.width ? row.width.toFixed(1) : '-' }}</td>
+                <td class="px-4 py-2">{{ row.length != null ? row.length.toFixed(2) : '-' }}</td>
+                <td class="px-4 py-2">{{ row.width != null ? row.width.toFixed(2) : '-' }}</td>
                 <td class="px-4 py-2">{{ row.type }}</td>
                 <td class="px-4 py-2">{{ row.testedAt || '-' }}</td>
               </tr>

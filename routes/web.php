@@ -40,6 +40,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('samplings/{sampling}', [SamplingController::class, 'destroy'])->name('samplings.destroy');
     Route::get('samplings/report', [SamplingController::class, 'report'])->name('samplings.report');
     Route::post('samplings/{sampling}/generate-samples', [SamplingController::class, 'generateSamples'])->name('samplings.generate-samples');
+    Route::post('samplings/{sampling}/ensure-sample-slots', [SamplingController::class, 'ensureSampleSlots'])->name('samplings.ensure-sample-slots');
+    Route::patch('samplings/{sampling}/report-samples', [SamplingController::class, 'updateReportSamples'])->name('samplings.update-report-samples');
     Route::get('samplings/export-report/{sampling?}', [SamplingController::class, 'exportReport'])->name('samplings.export-report');
     Route::get('test-pagination', function() {
         $samplings = \App\Models\Sampling::with('investor')->withCount('samples')->paginate(10);

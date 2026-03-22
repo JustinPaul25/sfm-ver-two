@@ -4,6 +4,8 @@ import { router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -55,6 +57,9 @@ const generationResults = ref<any>(null);
 const expandedCages = ref<Set<number>>(new Set());
 const scheduleDetails = ref<Record<number, ScheduleDetails>>({});
 const loadingDetails = ref<Record<number, boolean>>({});
+const editingTimesCageId = ref<number | null>(null);
+const timesDraft = ref<string[]>([]);
+const savingFeedingTimesCageId = ref<number | null>(null);
 
 const cagesWithoutSchedules = computed(() => {
   return props.cages.filter(cage => !cage.has_schedule);
@@ -152,6 +157,9 @@ const toggleCageExpansion = async (open: boolean, cageId: number) => {
       }
     } else {
       expandedCages.value.delete(cageId);
+      if (editingTimesCageId.value === cageId) {
+        cancelEditFeedingTimes();
+      }
     }
   } catch (error) {
     console.error('Error toggling cage expansion:', error);
@@ -233,6 +241,76 @@ const getPerFingerlingAmount = (cageId: number) => {
   }
   
   return ((totalAmount * 1000) / fingerlings).toFixed(2);
+};
+
+const feedingTimeSlotCount = (frequency: string): number => {
+  const map: Record<string, number> = {
+    daily: 1,
+    twice_daily: 2,
+    thrice_daily: 3,
+    four_times_daily: 4,
+  };
+  return map[frequency] ?? 4;
+};
+
+const startEditFeedingTimes = (cageId: number) => {
+  const details = getScheduleDetails(cageId);
+  const times = details?.schedule?.feeding_times;
+  if (!times?.length) return;
+  editingTimesCageId.value = cageId;
+  timesDraft.value = [...times];
+};
+
+const cancelEditFeedingTimes = () => {
+  editingTimesCageId.value = null;
+  timesDraft.value = [];
+};
+
+const saveFeedingTimes = async (cageId: number) => {
+  const details = getScheduleDetails(cageId);
+  const schedule = details?.schedule;
+  if (!schedule) return;
+
+  const slots = feedingTimeSlotCount(schedule.frequency);
+  for (let i = 0; i < slots; i++) {
+    const t = timesDraft.value[i];
+    if (!t || String(t).trim() === '') {
+      alert('Please set a time for each feeding slot.');
+      return;
+    }
+  }
+
+  const amounts = schedule.feeding_amounts ?? [0, 0, 0, 0];
+  const payload = {
+    schedule_name: schedule.schedule_name,
+    frequency: schedule.frequency,
+    notes: schedule.notes ?? '',
+    feeding_time_1: timesDraft.value[0] ?? null,
+    feeding_time_2: slots >= 2 ? (timesDraft.value[1] ?? null) : null,
+    feeding_time_3: slots >= 3 ? (timesDraft.value[2] ?? null) : null,
+    feeding_time_4: slots >= 4 ? (timesDraft.value[3] ?? null) : null,
+    feeding_amount_1: amounts[0] ?? 0,
+    feeding_amount_2: amounts[1] ?? 0,
+    feeding_amount_3: amounts[2] ?? 0,
+    feeding_amount_4: amounts[3] ?? 0,
+  };
+
+  savingFeedingTimesCageId.value = cageId;
+  try {
+    await axios.put(`/cages/feeding-schedules/${schedule.id}`, payload);
+    cancelEditFeedingTimes();
+    await fetchScheduleDetails(cageId);
+    router.reload({ only: ['cages'] });
+  } catch (error: any) {
+    const msg =
+      error.response?.data?.message ||
+      (error.response?.data?.errors &&
+        Object.values(error.response.data.errors).flat().join(' ')) ||
+      error.message;
+    alert('Could not save feeding times: ' + msg);
+  } finally {
+    savingFeedingTimesCageId.value = null;
+  }
 };
 </script>
 
@@ -467,26 +545,94 @@ const getPerFingerlingAmount = (cageId: number) => {
 
                           <!-- Feeding Times -->
                           <div v-if="getScheduleDetails(cage.id)?.schedule?.feeding_times?.length">
-                            <h5 class="font-semibold text-lg mb-3 text-green-600">Feeding Times</h5>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                              <div 
-                                v-for="(time, index) in getScheduleDetails(cage.id)?.schedule?.feeding_times || []" 
-                                :key="index"
-                                class="bg-white p-4 rounded-lg border"
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+                              <h5 class="font-semibold text-lg text-green-600">Feeding Times</h5>
+                              <Button
+                                v-if="editingTimesCageId !== cage.id"
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                class="shrink-0"
+                                @click="startEditFeedingTimes(cage.id)"
                               >
-                                <div class="flex items-center justify-between">
-                                  <div>
-                                    <p class="font-medium text-lg">{{ formatTime(time) }}</p>
-                                    <p class="text-sm text-muted-foreground">Feeding {{ index + 1 }}</p>
-                                  </div>
-                                  <div class="text-right">
-                                    <p class="font-semibold text-green-600">
-                                      {{ formatAmount(getScheduleDetails(cage.id)?.schedule?.feeding_amounts?.[index] || 0) }}
-                                    </p>
+                                Edit times
+                              </Button>
+                            </div>
+
+                            <div
+                              v-if="editingTimesCageId === cage.id"
+                              class="space-y-4 rounded-lg border bg-white p-4"
+                            >
+                              <div
+                                v-for="feedNum in feedingTimeSlotCount(getScheduleDetails(cage.id)?.schedule?.frequency || '')"
+                                :key="feedNum"
+                                class="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4"
+                              >
+                                <div class="flex-1 space-y-1">
+                                  <Label :for="`feeding-time-${cage.id}-${feedNum}`" class="text-muted-foreground">
+                                    Feeding {{ feedNum }}
+                                  </Label>
+                                  <Input
+                                    :id="`feeding-time-${cage.id}-${feedNum}`"
+                                    v-model="timesDraft[feedNum - 1]"
+                                    type="time"
+                                    step="60"
+                                    class="max-w-[11rem]"
+                                  />
+                                </div>
+                                <p class="text-sm text-muted-foreground sm:pb-2">
+                                  Amount:
+                                  <span class="font-semibold text-green-600">
+                                    {{ formatAmount(getScheduleDetails(cage.id)?.schedule?.feeding_amounts?.[feedNum - 1] || 0) }}
+                                  </span>
+                                </p>
+                              </div>
+                              <div class="flex flex-wrap gap-2 pt-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  :disabled="savingFeedingTimesCageId === cage.id"
+                                  @click="saveFeedingTimes(cage.id)"
+                                >
+                                  {{ savingFeedingTimesCageId === cage.id ? 'Saving…' : 'Save times' }}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  :disabled="savingFeedingTimesCageId === cage.id"
+                                  @click="cancelEditFeedingTimes"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                              <p class="text-xs text-muted-foreground">
+                                Amounts stay the same; only clock times are updated. Use 24-hour picker as shown, or your browser’s time control.
+                              </p>
+                            </div>
+
+                            <template v-else>
+                              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div 
+                                  v-for="(time, index) in getScheduleDetails(cage.id)?.schedule?.feeding_times || []" 
+                                  :key="index"
+                                  class="bg-white p-4 rounded-lg border"
+                                >
+                                  <div class="flex items-center justify-between">
+                                    <div>
+                                      <p class="font-medium text-lg">{{ formatTime(time) }}</p>
+                                      <p class="text-sm text-muted-foreground">Feeding {{ index + 1 }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                      <p class="font-semibold text-green-600">
+                                        {{ formatAmount(getScheduleDetails(cage.id)?.schedule?.feeding_amounts?.[index] || 0) }}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
+                            </template>
+
                             <p class="text-sm text-muted-foreground mt-2">
                               Frequency: <span class="font-medium">{{ getFrequencyLabel(getScheduleDetails(cage.id)?.schedule?.frequency || '') }}</span>
                             </p>

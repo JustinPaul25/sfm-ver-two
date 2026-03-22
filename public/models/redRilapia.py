@@ -139,12 +139,15 @@ class KivyCamera(Image):
                     real_world_length_in = real_world_length_cm / 2.54
                     real_world_width_in = real_world_width_cm / 2.54
 
-                    formatted_length = f"{real_world_length_in:.2f}"
-                    formatted_width = f"{real_world_width_in:.2f}"
+                    # Standard length = longer bbox axis, width = shorter (matches sampling report / API).
+                    long_in = max(real_world_length_in, real_world_width_in)
+                    short_in = min(real_world_length_in, real_world_width_in)
+                    formatted_length = f"{long_in:.2f}"
+                    formatted_width = f"{short_in:.2f}"
 
-                    if real_world_width_in <= STARTER_MAX_IN:
+                    if long_in <= STARTER_MAX_IN:
                         stage = "Starter"
-                    elif real_world_width_in <= GROWER_MAX_IN:
+                    elif long_in <= GROWER_MAX_IN:
                         stage = "Grower"
                     else:
                         stage = "Finisher"
@@ -237,7 +240,9 @@ class KivyCamera(Image):
                 "sampling_id": sampling_id,
                 "doc": doc,  # Required by API
                 "width": float(self.latest_width),
-                "height": float(self.latest_length)
+                "height": float(self.latest_length),
+                # Bbox values are in inches; API expects cm unless unit=in (see DocsController).
+                "unit": "in",
             }
 
             print(f"📡 Sending weight calculation: {payload}")
