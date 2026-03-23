@@ -297,10 +297,26 @@ class CageController extends Controller
             ->orderBy('consumption_date', 'desc')
             ->orderBy('day_number', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
-        
+
+        $feedSummary = $cage->feedConsumptions()
+            ->selectRaw('COUNT(*) as total_days_recorded, COALESCE(SUM(feed_amount), 0) as total_feed_consumed, COALESCE(MAX(day_number), 0) as max_day_number')
+            ->first();
+
+        $totalDaysRecorded = (int) $feedSummary->total_days_recorded;
+        $totalFeedConsumed = (float) $feedSummary->total_feed_consumed;
+        $averageDailyFeed = $totalDaysRecorded > 0
+            ? round($totalFeedConsumed / $totalDaysRecorded, 2)
+            : 0.0;
+
         return Inertia::render('Cages/View', [
             'cage' => $cage,
             'feedConsumptions' => $feedConsumptions,
+            'feedConsumptionSummary' => [
+                'total_days_recorded' => $totalDaysRecorded,
+                'total_feed_consumed' => $totalFeedConsumed,
+                'average_daily_feed' => $averageDailyFeed,
+                'max_day_number' => (int) $feedSummary->max_day_number,
+            ],
             'feedingSchedule' => $cage->feedingSchedule,
             'harvestAnticipation' => $harvestEstimation,
         ]);

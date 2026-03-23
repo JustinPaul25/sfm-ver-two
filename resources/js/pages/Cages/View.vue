@@ -54,6 +54,12 @@ const props = defineProps<{
   };
   feedingSchedule?: FeedingSchedule | null;
   harvestAnticipation?: HarvestAnticipation | null;
+  feedConsumptionSummary: {
+    total_days_recorded: number;
+    total_feed_consumed: number;
+    average_daily_feed: number;
+    max_day_number: number;
+  };
   errors?: any;
   flash?: any;
 }>();
@@ -151,17 +157,6 @@ const editConsumption = ref({
 });
 
 // Computed properties
-const totalFeedConsumed = computed(() => {
-  return feedConsumptions.value.data.reduce((total, consumption) => {
-    return total + parseFloat(consumption.feed_amount || '0');
-  }, 0);
-});
-
-const averageDailyFeed = computed(() => {
-  if (feedConsumptions.value.data.length === 0) return 0;
-  return totalFeedConsumed.value / feedConsumptions.value.data.length;
-});
-
 const pagination = computed(() => ({
   current_page: feedConsumptions.value.current_page,
   last_page: feedConsumptions.value.last_page,
@@ -295,7 +290,7 @@ const goToPage = (page: number) => {
   }, {
     preserveState: true,
     preserveScroll: true,
-    only: ['feedConsumptions'],
+    only: ['feedConsumptions', 'feedConsumptionSummary'],
     onSuccess: () => {
       // Force update the reactive ref after successful navigation
       feedConsumptions.value = props.feedConsumptions;
@@ -403,10 +398,8 @@ const openEditDialog = (consumption: FeedConsumption) => {
 };
 
 const resetNewConsumption = () => {
-  // Calculate the next day number based on existing consumptions
-  const maxDay = feedConsumptions.value.data.length > 0 
-    ? Math.max(...feedConsumptions.value.data.map(c => c.day_number))
-    : 0;
+  // Next day number from all records (paginated table only shows one page)
+  const maxDay = props.feedConsumptionSummary.max_day_number ?? 0;
     
   newConsumption.value = {
     day_number: maxDay + 1,
@@ -551,15 +544,15 @@ onMounted(() => {
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <h3 class="text-sm font-medium text-blue-600 dark:text-blue-400">Total Days Recorded</h3>
-              <p class="text-2xl font-bold text-blue-700 dark:text-blue-300">{{ pagination.total }}</p>
+              <p class="text-2xl font-bold text-blue-700 dark:text-blue-300">{{ feedConsumptionSummary.total_days_recorded }}</p>
             </div>
             <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <h3 class="text-sm font-medium text-green-600 dark:text-green-400">Total Feed Consumed</h3>
-              <p class="text-2xl font-bold text-green-700 dark:text-green-300">{{ totalFeedConsumed.toFixed(2) }} kg</p>
+              <p class="text-2xl font-bold text-green-700 dark:text-green-300">{{ Number(feedConsumptionSummary.total_feed_consumed).toFixed(2) }} kg</p>
             </div>
             <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
               <h3 class="text-sm font-medium text-purple-600 dark:text-purple-400">Average Daily Feed</h3>
-              <p class="text-2xl font-bold text-purple-700 dark:text-purple-300">{{ averageDailyFeed.toFixed(2) }} kg</p>
+              <p class="text-2xl font-bold text-purple-700 dark:text-purple-300">{{ Number(feedConsumptionSummary.average_daily_feed).toFixed(2) }} kg</p>
             </div>
           </div>
 
