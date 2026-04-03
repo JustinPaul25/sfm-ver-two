@@ -25,11 +25,12 @@ const isAdmin = computed(() => userRole.value === 'admin');
 interface User {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
+  username?: string | null;
   role: 'farmer' | 'investor' | 'admin';
   is_active: boolean;
   created_at: string;
-  investor_id?: number;
+  investor_id?: number | null;
   investor?: {
     id: number;
     name: string;
@@ -92,6 +93,7 @@ const editUser = ref<User | null>(null);
 const newUser = ref({
   name: '',
   email: '',
+  username: '',
   password: '',
   password_confirmation: '',
   role: 'farmer' as 'farmer' | 'investor' | 'admin',
@@ -206,6 +208,7 @@ function openCreateDialog() {
   newUser.value = {
     name: '',
     email: '',
+    username: '',
     role: 'farmer',
     address: '',
     phone: '',
@@ -225,10 +228,12 @@ function handleRoleChange() {
     newUser.value.address = '';
   } else if (newUser.value.role === 'investor') {
     newUser.value.investor_id = null;
+    newUser.value.username = '';
   } else if (newUser.value.role === 'admin') {
     newUser.value.address = '';
     newUser.value.phone = '';
     newUser.value.investor_id = null;
+    newUser.value.username = '';
   }
 }
 
@@ -240,12 +245,12 @@ async function createUser() {
     // Build the request payload based on the role
     const payload: any = {
       name: newUser.value.name,
-      email: newUser.value.email,
+      email: newUser.value.email || null,
       role: newUser.value.role,
     };
-    
-    // Add role-specific fields
+
     if (newUser.value.role === 'farmer') {
+      payload.username = newUser.value.username || null;
       payload.phone = newUser.value.phone;
       payload.investor_id = newUser.value.investor_id;
     } else if (newUser.value.role === 'investor') {
@@ -255,11 +260,15 @@ async function createUser() {
     // Admin doesn't need any additional fields
     
     console.log('Submitting user data:', payload);
-    await axios.post('/users', payload);
+    const { data } = await axios.post('/users', payload);
     await fetchUsers();
     await fetchStatistics();
     showCreateDialog.value = false;
-    Swal.fire({ icon: 'success', title: 'User created successfully!' });
+    Swal.fire({
+      icon: 'success',
+      title: 'User created successfully!',
+      text: data?.message ?? undefined,
+    });
   } catch (error: any) {
     console.error('Error creating user:', error);
     console.error('Error response:', error?.response);
@@ -283,7 +292,11 @@ async function createUser() {
 }
 
 function openEditDialog(user: User) {
-  editUser.value = { ...user };
+  editUser.value = {
+    ...user,
+    email: user.email ?? '',
+    investor_id: user.investor_id ?? null,
+  };
   showEditDialog.value = true;
 }
 
@@ -291,10 +304,14 @@ async function updateUser() {
   if (!editUser.value) return;
   
   try {
-    await axios.put(`/users/${editUser.value.id}`, {
+    const body: Record<string, unknown> = {
       name: editUser.value.name,
-      email: editUser.value.email,
-    });
+      email: editUser.value.email || null,
+    };
+    if (editUser.value.role === 'farmer' || editUser.value.role === 'investor') {
+      body.investor_id = editUser.value.investor_id;
+    }
+    await axios.put(`/users/${editUser.value.id}`, body);
     await fetchUsers();
     showEditDialog.value = false;
     editUser.value = null;
@@ -441,6 +458,7 @@ onMounted(() => {
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Investor</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -450,14 +468,15 @@ onMounted(() => {
           </thead>
           <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-if="loading" class="animate-pulse">
-              <td colspan="7" class="px-6 py-4 text-center text-gray-500">Loading...</td>
+              <td colspan="8" class="px-6 py-4 text-center text-gray-500">Loading...</td>
             </tr>
             <tr v-else-if="users.data.length === 0">
-              <td colspan="7" class="px-6 py-4 text-center text-gray-500">No users found.</td>
+              <td colspan="8" class="px-6 py-4 text-center text-gray-500">No users found.</td>
             </tr>
             <tr v-else v-for="user in users.data" :key="user.id">
               <td class="px-6 py-4 whitespace-nowrap font-medium">{{ user.name }}</td>
-              <td class="px-6 py-4 whitespace-nowrap">{{ user.email }}</td>
+              <td class="px-6 py-4 whitespace-nowrap">{{ user.email ?? '—' }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">{{ user.username ?? '—' }}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <select 
                   :value="user.role" 
@@ -594,14 +613,48 @@ onMounted(() => {
               {{ validationErrors.name[0] }}
             </p>
           </div>
-          <div class="flex flex-col gap-1">
+          <template v-if="newUser.role === 'farmer'">
+            <div class="flex flex-col gap-1">
+              <label for="email" class="text-sm font-medium">Email <span class="text-muted-foreground font-normal">(optional)</span></label>
+              <Input
+                id="email"
+                v-model="newUser.email"
+                type="email"
+                placeholder="Leave blank if the farmer has no email"
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.email }"
+              />
+              <p v-if="validationErrors.email" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.email[0] }}
+              </p>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label for="username" class="text-sm font-medium">Username <span class="text-muted-foreground font-normal">(optional)</span></label>
+              <Input
+                id="username"
+                v-model="newUser.username"
+                type="text"
+                placeholder="e.g. bernard_cage1 — letters, numbers, dashes"
+                autocomplete="off"
+                :disabled="creatingUser"
+                :class="{ 'border-red-500': validationErrors.username }"
+              />
+              <p v-if="validationErrors.username" class="text-xs text-red-500 mt-1">
+                {{ validationErrors.username[0] }}
+              </p>
+              <p v-else class="text-xs text-muted-foreground mt-1">
+                Farmers need at least an email or a username to sign in. Usernames must be unique.
+              </p>
+            </div>
+          </template>
+          <div v-else class="flex flex-col gap-1">
             <label for="email" class="text-sm font-medium">Email</label>
-            <Input 
-              id="email" 
-              v-model="newUser.email" 
-              type="email" 
-              placeholder="Enter email" 
-              required 
+            <Input
+              id="email"
+              v-model="newUser.email"
+              type="email"
+              placeholder="Enter email"
+              required
               :disabled="creatingUser"
               :class="{ 'border-red-500': validationErrors.email }"
             />
@@ -712,7 +765,13 @@ onMounted(() => {
 
           <div class="bg-blue-50 dark:bg-blue-950 p-3 rounded-md border border-blue-200 dark:border-blue-800">
             <p class="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Note:</strong> A secure password will be automatically generated and sent to the user's email address.
+              <strong>Note:</strong>
+              <template v-if="newUser.role === 'farmer' && !newUser.email?.trim()">
+                A secure password will be generated. No welcome email will be sent—share the username and temporary password with the farmer directly.
+              </template>
+              <template v-else>
+                A secure password will be automatically generated and sent to the user's email address when an email is provided.
+              </template>
             </p>
           </div>
           <DialogFooter class="flex justify-end gap-2 mt-4">
@@ -742,8 +801,36 @@ onMounted(() => {
             <Input id="edit_name" v-model="editUser.name" type="text" placeholder="Enter name" required />
           </div>
           <div class="flex flex-col gap-1">
-            <label for="edit_email" class="text-sm font-medium">Email</label>
-            <Input id="edit_email" v-model="editUser.email" type="email" placeholder="Enter email" required />
+            <label for="edit_email" class="text-sm font-medium">
+              Email
+              <span v-if="editUser.role === 'farmer'" class="text-muted-foreground font-normal">
+                (optional only if this user already has a username for login)
+              </span>
+            </label>
+            <Input
+              id="edit_email"
+              v-model="editUser.email"
+              type="email"
+              placeholder="Enter email"
+              :required="editUser.role !== 'farmer' || !editUser.username"
+            />
+          </div>
+          <div v-if="editUser.role === 'farmer' || editUser.role === 'investor'" class="flex flex-col gap-1">
+            <label for="edit_investor_id" class="text-sm font-medium">Investor</label>
+            <select
+              id="edit_investor_id"
+              v-model="editUser.investor_id"
+              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              required
+            >
+              <option :value="null" disabled>Select an investor</option>
+              <option v-for="inv in investors" :key="inv.id" :value="inv.id">
+                {{ inv.name }}
+              </option>
+            </select>
+            <p v-if="editUser.role === 'farmer'" class="text-xs text-muted-foreground">
+              The investor (pond / site) this user is associated with
+            </p>
           </div>
           <DialogFooter class="flex justify-end gap-2 mt-4">
             <Button type="button" variant="secondary" @click="showEditDialog = false">Cancel</Button>

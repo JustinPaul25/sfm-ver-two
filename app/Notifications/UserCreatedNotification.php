@@ -7,7 +7,6 @@ use Illuminate\Notifications\Notification;
 
 class UserCreatedNotification extends Notification
 {
-
     /**
      * Create a new notification instance.
      */
@@ -34,15 +33,23 @@ class UserCreatedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $loginUrl = url('/login');
-        
-        return (new MailMessage)
+
+        $message = (new MailMessage)
             ->subject('Welcome to Smart Fish Management System')
-            ->greeting('Hello ' . $notifiable->name . '!')
+            ->greeting('Hello '.$notifiable->name.'!')
             ->line('Your account has been created successfully.')
-            ->line('**Account Details:**')
-            ->line('Email: ' . $notifiable->email)
-            ->line('Role: ' . ucfirst($this->role))
-            ->line('Temporary Password: **' . $this->password . '**')
+            ->line('**Account Details:**');
+
+        if ($notifiable->email) {
+            $message->line('Email: '.$notifiable->email);
+        }
+        if ($notifiable->username) {
+            $message->line('Username: '.$notifiable->username.' (use this to log in if you do not use email)');
+        }
+
+        return $message
+            ->line('Role: '.ucfirst($this->role))
+            ->line('Temporary Password: **'.$this->password.'**')
             ->line('Please keep this password safe and change it after your first login.')
             ->action('Login to Your Account', $loginUrl)
             ->line('If you have any questions, please contact your administrator.')

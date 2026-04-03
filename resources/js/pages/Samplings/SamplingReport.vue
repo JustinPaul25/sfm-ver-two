@@ -383,7 +383,7 @@ const aiAverages = computed(() => {
               :disabled="editSamplesLoading"
               @click="openEditSamplesDialog"
             >
-              ✏️ Edit data
+              ➕ Add Record
             </Button>
             <Dialog v-model:open="showDetectionDialog">
               <DialogTrigger as-child>
@@ -597,6 +597,15 @@ const aiAverages = computed(() => {
         </div>
         <div class="mt-8">
           <h3 class="font-semibold mb-2">Historical Data</h3>
+          <p class="text-sm text-muted-foreground mb-3 max-w-3xl">
+            Each row is one sampling session for this investor, in date order. To encode seasons or past years, add a new sampling on the
+            <a :href="route('samplings.index')" class="text-primary underline underline-offset-2 font-medium">Samplings</a>
+            page for each date you need, then open that session’s report
+            <span v-if="!isInvestor">
+              and use <span class="font-medium text-foreground">Add Record</span> at the top to enter fish weights and measurements for that day.
+            </span>
+            <span v-else> to review weights and other details for that day.</span>
+          </p>
           <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-white dark:bg-gray-900">
             <table class="min-w-full text-xs md:text-sm">
               <thead class="bg-gray-50 dark:bg-gray-800">
@@ -607,11 +616,9 @@ const aiAverages = computed(() => {
                   <th class="px-2 py-2">Mortality to date (pcs)</th>
                   <th class="px-2 py-2">Present Stocks (pcs)</th>
                   <th class="px-2 py-2">ABW (grams)</th>
-                  <th class="px-2 py-2">Wt. Increment per day (grams)</th>
                   <th class="px-2 py-2">Biomass (kgs)</th>
                   <th class="px-2 py-2">Feeding Rate</th>
                   <th class="px-2 py-2">Feed Consumed (kgs)</th>
-                  <th class="px-2 py-2">Total Wt. gained (kgs)</th>
                   <th class="px-2 py-2">FCR</th>
                 </tr>
               </thead>
@@ -623,11 +630,9 @@ const aiAverages = computed(() => {
                   <td class="px-2 py-1">{{ row.mortality }}</td>
                   <td class="px-2 py-1">{{ row.present }}</td>
                   <td class="px-2 py-1">{{ row.abw }}</td>
-                  <td class="px-2 py-1">{{ row.wtInc }}</td>
                   <td class="px-2 py-1">{{ row.biomass }}</td>
                   <td class="px-2 py-1">{{ row.fr }}</td>
                   <td class="px-2 py-1">{{ row.feed }}</td>
-                  <td class="px-2 py-1">{{ row.totalGained }}</td>
                   <td class="px-2 py-1">{{ row.fcr }}</td>
                 </tr>
               </tbody>

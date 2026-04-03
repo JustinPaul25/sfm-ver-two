@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Investor;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rules;
-use Illuminate\Support\Str;
+use App\Models\User;
 use App\Notifications\UserCreatedNotification;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class UserController extends Controller
 {
@@ -32,9 +32,10 @@ class UserController extends Controller
         // Search functionality
         if ($request->has('search') && $request->get('search')) {
             $search = $request->get('search');
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('username', 'like', "%{$search}%");
             });
         }
 
@@ -61,7 +62,7 @@ class UserController extends Controller
                 'from' => $users->firstItem(),
                 'to' => $users->lastItem(),
             ],
-            'filters' => $request->only(['search', 'role', 'status', 'page'])
+            'filters' => $request->only(['search', 'role', 'status', 'page']),
         ]);
     }
 
@@ -71,9 +72,9 @@ class UserController extends Controller
     public function getFarmersByInvestor(Request $request)
     {
         $investorId = $request->get('investor_id');
-        
+
         $query = User::where('role', 'farmer')
-                     ->where('is_active', true);
+            ->where('is_active', true);
 
         if ($investorId) {
             $query->where('investor_id', $investorId);
@@ -89,9 +90,15 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+        $emailIn = $request->input('email');
+        $usernameIn = $request->input('username');
+        $request->merge([
+            'email' => ($emailIn !== null && trim((string) $emailIn) !== '') ? Str::lower(trim((string) $emailIn)) : null,
+            'username' => ($usernameIn !== null && trim((string) $usernameIn) !== '') ? Str::lower(trim((string) $usernameIn)) : null,
+        ]);
+
+        $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:users',
             'role' => 'required|in:farmer,investor,admin',
             // Required for investor role
             'address' => 'nullable|required_if:role,investor|string|max:255',
@@ -104,7 +111,17 @@ class UserController extends Controller
             ],
             // Required for farmer role
             'investor_id' => 'nullable|required_if:role,farmer|exists:investors,id',
-        ], [
+        ];
+
+        if ($request->role === 'farmer') {
+            $rules['email'] = ['nullable', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email', 'required_without:username'];
+            $rules['username'] = ['nullable', 'string', 'max:50', 'alpha_dash', 'unique:users,username', 'required_without:email'];
+        } else {
+            $rules['email'] = ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'];
+            $rules['username'] = ['nullable', 'string', 'max:50', 'alpha_dash', 'unique:users,username'];
+        }
+
+        $request->validate($rules, [
             'phone.regex' => 'The phone number must be a valid Philippine mobile number (e.g., +639123456789, 09123456789, or 9123456789).',
         ]);
 
@@ -118,21 +135,22 @@ class UserController extends Controller
                 $phone = $request->phone;
                 $phone = preg_replace('/\D/', '', $phone); // Remove non-digits
                 if (strlen($phone) === 10) {
-                    $phone = '63' . $phone; // 9XXXXXXXXX -> 639XXXXXXXXX
-                } else if (strlen($phone) === 11 && $phone[0] === '0') {
-                    $phone = '63' . substr($phone, 1); // 09XXXXXXXXX -> 639XXXXXXXXX
+                    $phone = '63'.$phone; // 9XXXXXXXXX -> 639XXXXXXXXX
+                } elseif (strlen($phone) === 11 && $phone[0] === '0') {
+                    $phone = '63'.substr($phone, 1); // 09XXXXXXXXX -> 639XXXXXXXXX
                 }
-                $normalizedPhone = '+' . $phone;
+                $normalizedPhone = '+'.$phone;
             }
 
             $userData = [
                 'name' => $request->name,
                 'email' => $request->email,
+                'username' => $request->username,
                 'phone' => $normalizedPhone,
                 'password' => Hash::make($generatedPassword),
                 'role' => $request->role,
                 'is_active' => true,
-                'email_verified_at' => now(),
+                'email_verified_at' => $request->email ? now() : null,
             ];
 
             // If creating an investor, create the Investor record first
@@ -153,14 +171,19 @@ class UserController extends Controller
             return User::create($userData);
         });
 
-        // Send email notification with the generated password
-        $user->notify(new UserCreatedNotification($generatedPassword, $user->role));
+        if ($user->email) {
+            $user->notify(new UserCreatedNotification($generatedPassword, $user->role));
+        }
 
         $user->load('investor');
 
+        $message = $user->email
+            ? 'User created successfully. Login credentials have been sent to their email.'
+            : 'User created successfully. Share their username and temporary password with them in person; no email was sent because no address was provided.';
+
         return response()->json([
-            'message' => 'User created successfully. Login credentials have been sent to their email.',
-            'user' => $user
+            'message' => $message,
+            'user' => $user,
         ]);
     }
 
@@ -172,7 +195,7 @@ class UserController extends Controller
         // Prevent admin from changing their own role
         if ($user->id === $request->user()->id) {
             return response()->json([
-                'message' => 'You cannot change your own role'
+                'message' => 'You cannot change your own role',
             ], 403);
         }
 
@@ -181,12 +204,12 @@ class UserController extends Controller
         ]);
 
         $user->update([
-            'role' => $request->role
+            'role' => $request->role,
         ]);
 
         return response()->json([
             'message' => 'User role updated successfully',
-            'user' => $user
+            'user' => $user,
         ]);
     }
 
@@ -198,19 +221,19 @@ class UserController extends Controller
         // Prevent admin from deactivating themselves
         if ($user->id === $request->user()->id) {
             return response()->json([
-                'message' => 'You cannot deactivate your own account'
+                'message' => 'You cannot deactivate your own account',
             ], 403);
         }
 
         $user->update([
-            'is_active' => !$user->is_active
+            'is_active' => ! $user->is_active,
         ]);
 
         $status = $user->is_active ? 'activated' : 'deactivated';
 
         return response()->json([
             'message' => "User {$status} successfully",
-            'user' => $user
+            'user' => $user,
         ]);
     }
 
@@ -219,16 +242,73 @@ class UserController extends Controller
      */
     public function update(Request $request, User $user)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:users,email,' . $user->id,
+        $emailIn = $request->input('email');
+        $request->merge([
+            'email' => ($emailIn !== null && trim((string) $emailIn) !== '') ? Str::lower(trim((string) $emailIn)) : null,
         ]);
 
-        $user->update($request->only(['name', 'email']));
+        if ($user->role === 'farmer') {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => [
+                    'nullable',
+                    'string',
+                    'lowercase',
+                    'email',
+                    'max:255',
+                    Rule::unique('users', 'email')->ignore($user->id),
+                    function (string $attribute, mixed $value, \Closure $fail) use ($user) {
+                        $emailEmpty = $value === null || $value === '';
+                        if ($emailEmpty && empty($user->username)) {
+                            $fail('Either an email or an existing username is required for this user.');
+                        }
+                    },
+                ],
+                'investor_id' => 'required|exists:investors,id',
+            ]);
+            $user->update([
+                'name' => $request->name,
+                'email' => $request->email,
+                'investor_id' => $request->investor_id,
+            ]);
+        } elseif ($user->role === 'investor') {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => [
+                    'required',
+                    'string',
+                    'lowercase',
+                    'email',
+                    'max:255',
+                    Rule::unique('users', 'email')->ignore($user->id),
+                ],
+                'investor_id' => 'required|exists:investors,id',
+            ]);
+            $user->update([
+                'name' => $request->name,
+                'email' => $request->email,
+                'investor_id' => $request->investor_id,
+            ]);
+        } else {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => [
+                    'required',
+                    'string',
+                    'lowercase',
+                    'email',
+                    'max:255',
+                    Rule::unique('users', 'email')->ignore($user->id),
+                ],
+            ]);
+            $user->update($request->only(['name', 'email']));
+        }
+
+        $user->load('investor');
 
         return response()->json([
             'message' => 'User updated successfully',
-            'user' => $user
+            'user' => $user,
         ]);
     }
 
@@ -240,17 +320,17 @@ class UserController extends Controller
         // Prevent admin from deleting themselves
         if ($user->id === $request->user()->id) {
             return response()->json([
-                'message' => 'You cannot delete your own account'
+                'message' => 'You cannot delete your own account',
             ], 403);
         }
 
         // Delete related data first
         $user->cages()->delete();
-        
+
         $user->delete();
 
         return response()->json([
-            'message' => 'User deleted successfully'
+            'message' => 'User deleted successfully',
         ]);
     }
 
@@ -262,7 +342,7 @@ class UserController extends Controller
         $totalUsers = User::count();
         $activeUsers = User::where('is_active', true)->count();
         $inactiveUsers = User::where('is_active', false)->count();
-        
+
         $usersByRole = User::selectRaw('role, COUNT(*) as count')
             ->groupBy('role')
             ->get()
@@ -276,7 +356,7 @@ class UserController extends Controller
                 'farmers' => $usersByRole['farmer'] ?? 0,
                 'investors' => $usersByRole['investor'] ?? 0,
                 'admins' => $usersByRole['admin'] ?? 0,
-            ]
+            ],
         ]);
     }
 
@@ -288,7 +368,7 @@ class UserController extends Controller
     {
         if ($user->role !== 'investor') {
             return response()->json([
-                'message' => 'User is not an investor'
+                'message' => 'User is not an investor',
             ], 422);
         }
 
@@ -308,7 +388,7 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Investor user linked successfully',
-            'user' => $user->load('investor')
+            'user' => $user->load('investor'),
         ]);
     }
 
@@ -344,7 +424,7 @@ class UserController extends Controller
             'message' => 'Investor link fix completed',
             'fixed' => $fixed,
             'not_found' => $notFound,
-            'total_checked' => $investorUsers->count()
+            'total_checked' => $investorUsers->count(),
         ]);
     }
 }

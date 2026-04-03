@@ -19,6 +19,7 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'phone',
         'password',
@@ -109,66 +110,63 @@ class User extends Authenticatable
     /**
      * Get total feed consumption for this farmer across all cages.
      *
-     * @param \Carbon\Carbon|null $startDate
-     * @param \Carbon\Carbon|null $endDate
-     * @return float
+     * @param  \Carbon\Carbon|null  $startDate
+     * @param  \Carbon\Carbon|null  $endDate
      */
     public function getTotalFeedConsumption($startDate = null, $endDate = null): float
     {
         $query = $this->feedConsumptions();
-        
+
         if ($startDate) {
             $query->where('consumption_date', '>=', $startDate);
         }
-        
+
         if ($endDate) {
             $query->where('consumption_date', '<=', $endDate);
         }
-        
+
         return (float) $query->sum('feed_amount');
     }
 
     /**
      * Get average daily feed consumption for this farmer.
      *
-     * @param \Carbon\Carbon|null $startDate
-     * @param \Carbon\Carbon|null $endDate
-     * @return float
+     * @param  \Carbon\Carbon|null  $startDate
+     * @param  \Carbon\Carbon|null  $endDate
      */
     public function getAverageFeedConsumption($startDate = null, $endDate = null): float
     {
         $query = $this->feedConsumptions();
-        
+
         if ($startDate) {
             $query->where('consumption_date', '>=', $startDate);
         }
-        
+
         if ($endDate) {
             $query->where('consumption_date', '<=', $endDate);
         }
-        
+
         return (float) $query->avg('feed_amount') ?? 0.0;
     }
 
     /**
      * Get feed consumption count for this farmer.
      *
-     * @param \Carbon\Carbon|null $startDate
-     * @param \Carbon\Carbon|null $endDate
-     * @return int
+     * @param  \Carbon\Carbon|null  $startDate
+     * @param  \Carbon\Carbon|null  $endDate
      */
     public function getFeedConsumptionCount($startDate = null, $endDate = null): int
     {
         $query = $this->feedConsumptions();
-        
+
         if ($startDate) {
             $query->where('consumption_date', '>=', $startDate);
         }
-        
+
         if ($endDate) {
             $query->where('consumption_date', '<=', $endDate);
         }
-        
+
         return $query->count();
     }
 }
