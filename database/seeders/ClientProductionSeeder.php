@@ -71,10 +71,6 @@ class ClientProductionSeeder extends Seeder
                 $this->seedSamplingsAndSamples($cageRow, $scenario, $eligibleDates);
             }
 
-            // Extra samplings in the rolling calendar window so investor dashboard charts
-            // (default ~last 30 days from "today") have points — fixed March/April 2026 dates alone often fall outside that window.
-            $this->seedDashboardWindowSamplings($cages);
-
             $this->seedInvestorUsers($investors);
 
             Schema::enableForeignKeyConstraints();
@@ -321,81 +317,6 @@ class ClientProductionSeeder extends Seeder
     }
 
     /**
-     * Weekday-only dates from roughly the last 45 days through today (Manila), for dashboard charts.
-     *
-     * @return list<Carbon>
-     */
-    private function dashboardWeekdayDates(): array
-    {
-        $tz = self::TZ;
-        $end = Carbon::now($tz)->startOfDay();
-        $start = Carbon::now($tz)->copy()->subDays(45)->startOfDay();
-
-        $rangeStart = Carbon::parse(self::RANGE_START, $tz)->startOfDay();
-        $rangeEnd = Carbon::parse(self::RANGE_END, $tz)->startOfDay();
-
-        $days = [];
-        for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
-            if ($d->isWeekend()) {
-                continue;
-            }
-            // Avoid duplicating the client's fixed feeding window on the same calendar dates.
-            if ($d->gte($rangeStart) && $d->lte($rangeEnd)) {
-                continue;
-            }
-            $days[] = $d->copy();
-        }
-
-        return $days;
-    }
-
-    /**
-     * Several samplings per cage over the recent window so cage_performance / sampling_trends have rows under default period filters.
-     *
-     * @param  list<Cage>  $cages
-     */
-    private function seedDashboardWindowSamplings(array $cages): void
-    {
-        $weekdays = $this->dashboardWeekdayDates();
-        $n = count($weekdays);
-        if ($n === 0) {
-            return;
-        }
-
-        $rawIndices = [
-            0,
-            (int) floor($n * 0.2),
-            (int) floor($n * 0.4),
-            (int) floor($n * 0.6),
-            (int) floor($n * 0.8),
-            $n - 1,
-        ];
-        $indices = array_values(array_unique($rawIndices));
-        sort($indices);
-
-        foreach ($cages as $idx => $cage) {
-            $scenario = self::SCENARIO_CODES[$idx % 4];
-            $visit = 1;
-
-            foreach ($indices as $idxPick) {
-                $idxPick = max(0, min($n - 1, $idxPick));
-                $date = $weekdays[$idxPick];
-
-                $doc = sprintf(
-                    'DOC-%s-C%d-R%d',
-                    $date->copy()->timezone(self::TZ)->format('Ymd'),
-                    $cage->id,
-                    $visit
-                );
-
-                $this->createSamplingWithSamples($cage, $scenario, $date, $doc);
-
-                $visit++;
-            }
-        }
-    }
-
-    /**
      * One login per investor; user name matches investor record (POND N) for automatic linkage in the app.
      *
      * @param  list<Investor>  $investors
@@ -435,10 +356,12 @@ class ClientProductionSeeder extends Seeder
             return;
         }
 
+        // Exactly 5 samplings per cage within the fixed feeding window.
         $rawIndices = [
             0,
-            (int) floor($n / 3),
-            (int) floor(2 * $n / 3),
+            (int) floor($n * 0.25),
+            (int) floor($n * 0.5),
+            (int) floor($n * 0.75),
             $n - 1,
         ];
         $indices = array_values(array_unique($rawIndices));
@@ -456,7 +379,7 @@ class ClientProductionSeeder extends Seeder
                 $visit
             );
 
-            $this->createSamplingWithSamples($cage, $scenario, $date, $doc);
+            $this->createSamplingWithSamples($cage, $scenario, $date, $doc, $visit, count($indices));
 
             $visit++;
         }
@@ -465,8 +388,14 @@ class ClientProductionSeeder extends Seeder
     /**
      * Persist sampling + samples with timestamps on date_sampling (Manila), staggered fish measurements.
      */
-    private function createSamplingWithSamples(Cage $cage, string $scenario, Carbon $sampleCalendarDate, string $doc): void
-    {
+    private function createSamplingWithSamples(
+        Cage $cage,
+        string $scenario,
+        Carbon $sampleCalendarDate,
+        string $doc,
+        int $visitNo = 1,
+        int $totalVisits = 5
+    ): void {
         $sessionStart = $this->clampToFarmDayHours(
             $this->randomManilaSamplingSessionStart($sampleCalendarDate)->copy()
         );
@@ -483,14 +412,21 @@ class ClientProductionSeeder extends Seeder
         $sampling->updated_at = $sessionStart;
         $sampling->save();
 
-        $lastSampleAt = $this->seedSamplesForSampling($sampling, $cage, $scenario, $sampleCalendarDate, $sessionStart);
+        $lastSampleAt = $this->seedSamplesForSampling($sampling, $cage, $scenario, $sampleCalendarDate, $sessionStart, $visitNo, $totalVisits);
         $sampling->forceFill(['updated_at' => $this->clampToFarmDayHours($lastSampleAt)])->saveQuietly();
     }
 
-    private function seedSamplesForSampling(Sampling $sampling, Cage $cage, string $scenario, Carbon $sampleDate, Carbon $sessionStart): Carbon
-    {
+    private function seedSamplesForSampling(
+        Sampling $sampling,
+        Cage $cage,
+        string $scenario,
+        Carbon $sampleDate,
+        Carbon $sessionStart,
+        int $visitNo,
+        int $totalVisits
+    ): Carbon {
         $count = 8;
-        $baseAbw = $this->abwGramsForScenario($scenario, $sampleDate);
+        $baseAbw = $this->samplingAbwForVisit($scenario, $sampleDate, $visitNo, $totalVisits);
 
         $t = $this->clampToFarmDayHours($sessionStart->copy());
         $lastAt = $t->copy();
@@ -519,6 +455,24 @@ class ClientProductionSeeder extends Seeder
         }
 
         return $lastAt;
+    }
+
+    /**
+     * Start samplings at juvenile weight, then progress toward scenario target.
+     */
+    private function samplingAbwForVisit(string $scenario, Carbon $date, int $visitNo, int $totalVisits): float
+    {
+        $target = $this->abwGramsForScenario($scenario, $date);
+        $juvenileStart = 35.0; // tilapia juvenile baseline (grams)
+
+        if ($totalVisits <= 1) {
+            return $target;
+        }
+
+        $progress = ($visitNo - 1) / max(1, ($totalVisits - 1));
+        $progress = max(0.0, min(1.0, $progress));
+
+        return $juvenileStart + (($target - $juvenileStart) * $progress);
     }
 
     /**
