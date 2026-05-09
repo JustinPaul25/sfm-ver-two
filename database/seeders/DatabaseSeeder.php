@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
 
         $this->command->info('Seeding complete.');
         $this->command->info('Admin: admin@sfm.com / admin123');
-        $this->command->info('Investors: pond1–pond11 / investor123 (or pond{N}@sfm.local)');
+        $this->command->info('Investors: pond1–pond11 / investor123 (dummy email pond{N}@example.invalid)');
         $this->command->info('Users: '.User::count());
     }
 }

@@ -37,6 +37,21 @@ class ClientProductionSeeder extends Seeder
     /** Pond index 0 = POND 1; cycles B, F, FB, FI */
     private const SCENARIO_CODES = ['B', 'F', 'FB', 'FI'];
 
+    /** Investor names (POND 1–11 order); emails are dummy addresses on linked users only. */
+    private const INVESTOR_NAMES = [
+        'BAÑAGA, Marilet A.',
+        'CESISTA, Roy B.',
+        'CESISTA, Ruel B.',
+        'DAHILAN, Melanie G.',
+        'GAITERA, Orlando O.',
+        'GULIBAN Jr., Gaudencio M.',
+        'MEJOS, Berniel N.',
+        'REÑOLA, Richard G.',
+        'ROSOS, Edwin S.',
+        'TARAY, Jerry B.',
+        'TOLEDO, Ryan A.',
+    ];
+
     public function run(): void
     {
         $now = now();
@@ -77,7 +92,7 @@ class ClientProductionSeeder extends Seeder
         });
 
         $this->command->info('Client production data seeded (investors, cages, consumptions, samplings, samples, investor users).');
-        $this->command->info('Investor login: username pond1–pond11 / password investor123 (email pond{N}@sfm.local).');
+        $this->command->info('Investor login: username pond1–pond11 / password investor123 (dummy email pond{N}@example.invalid).');
     }
 
     private function seedFeedTypes(\DateTimeInterface $now): void
@@ -146,7 +161,7 @@ class ClientProductionSeeder extends Seeder
         $created = [];
         for ($i = 1; $i <= 11; $i++) {
             $investor = Investor::create([
-                'name' => 'POND '.$i,
+                'name' => self::INVESTOR_NAMES[$i - 1],
                 'address' => 'NANYO BFAR',
                 'phone' => '09514833263',
             ]);
@@ -317,7 +332,7 @@ class ClientProductionSeeder extends Seeder
     }
 
     /**
-     * One login per investor; user name matches investor record (POND N) for automatic linkage in the app.
+     * One login per investor; username pond{N}; display name matches investor record for linkage in the app.
      *
      * @param  list<Investor>  $investors
      */
@@ -328,7 +343,7 @@ class ClientProductionSeeder extends Seeder
             $user = User::create([
                 'name' => $investor->name,
                 'username' => 'pond'.$n,
-                'email' => 'pond'.$n.'@sfm.local',
+                'email' => 'pond'.$n.'@example.invalid',
                 'password' => Hash::make('investor123'),
                 'role' => 'investor',
                 'is_active' => true,
