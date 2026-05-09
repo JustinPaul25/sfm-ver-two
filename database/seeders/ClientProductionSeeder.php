@@ -458,21 +458,31 @@ class ClientProductionSeeder extends Seeder
     }
 
     /**
-     * Start samplings at juvenile weight, then progress toward scenario target.
+     * Progress ABW monotonically toward scenario target so harvest slope from seed data stays plausible.
      */
     private function samplingAbwForVisit(string $scenario, Carbon $date, int $visitNo, int $totalVisits): float
     {
         $target = $this->abwGramsForScenario($scenario, $date);
-        $juvenileStart = 35.0; // tilapia juvenile baseline (grams)
 
         if ($totalVisits <= 1) {
             return $target;
         }
 
+        $start = match ($scenario) {
+            'F' => max(0.02, min(0.032, $target * 0.8)),
+            'FI' => min(12.0, max(2.0, $target * 0.45)),
+            'FB' => min(130.0, max(42.0, $target * 0.32)),
+            'B' => min(340.0, max(110.0, $target * 0.22)),
+            default => 35.0,
+        };
+
+        $from = min($start, $target);
+        $to = max($start, $target);
+
         $progress = ($visitNo - 1) / max(1, ($totalVisits - 1));
         $progress = max(0.0, min(1.0, $progress));
 
-        return $juvenileStart + (($target - $juvenileStart) * $progress);
+        return $from + (($to - $from) * $progress);
     }
 
     /**

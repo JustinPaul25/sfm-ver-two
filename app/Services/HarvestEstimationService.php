@@ -13,12 +13,16 @@ class HarvestEstimationService
 
     public const DEFAULT_GROWTH_RATE_G_PER_DAY = 3;
 
+    /** Absolute ceiling on projected days so UI never shows absurd timelines when slope noise dominates. */
+    public const MAX_PROJECTED_HARVEST_DAYS = 730;
+
     /**
      * Get target harvest weight in grams from system settings.
      */
     public function getTargetWeightG(): float
     {
         $v = SystemSetting::get('harvest_target_weight_grams', (string) self::DEFAULT_TARGET_WEIGHT_G);
+
         return (float) ($v !== null ? $v : self::DEFAULT_TARGET_WEIGHT_G);
     }
 
@@ -28,6 +32,7 @@ class HarvestEstimationService
     public function getDefaultGrowthRateGPerDay(): float
     {
         $v = SystemSetting::get('harvest_default_growth_rate_g_per_day', (string) self::DEFAULT_GROWTH_RATE_G_PER_DAY);
+
         return (float) ($v !== null ? $v : self::DEFAULT_GROWTH_RATE_G_PER_DAY);
     }
 
@@ -68,13 +73,20 @@ class HarvestEstimationService
         if ($pair !== null) {
             [$avg1, $date1, $avg2, $date2] = $pair;
             $daysBetween = Carbon::parse($date1)->diffInDays(Carbon::parse($date2));
-            if ($daysBetween > 0 && $avg1 > 0) {
+            // Require clear upward trend; tiny positive slopes from jitter explode days_until_harvest.
+            if ($daysBetween > 0 && $avg1 > 0 && $avg2 > $avg1) {
                 $derived = ($avg2 - $avg1) / $daysBetween;
-                if ($derived > 0) {
+                $minReliable = $defaultGrowthGPerDay * 0.05;
+                $maxReliable = $defaultGrowthGPerDay * 40;
+                if ($derived >= $minReliable && $derived <= $maxReliable) {
                     $growthRateGPerDay = $derived;
                 }
             }
         }
+
+        // Never divide by near-zero effective growth: blend in default when derived is unusable.
+        $growthRateGPerDay = max($growthRateGPerDay, $defaultGrowthGPerDay * 0.25);
+        $growthRateGPerDay = min($growthRateGPerDay, $defaultGrowthGPerDay * 40);
 
         if ($currentAvgG >= $targetWeightG) {
             return [
@@ -88,12 +100,13 @@ class HarvestEstimationService
             ];
         }
 
-        $daysUntil = (int) ceil(($targetWeightG - $currentAvgG) / $growthRateGPerDay);
+        $daysUntil = (int) ceil(($targetWeightG - $currentAvgG) / max($growthRateGPerDay, 1e-6));
+        $daysUntil = max(0, min($daysUntil, self::MAX_PROJECTED_HARVEST_DAYS));
         $estimatedDate = $latestDate->copy()->addDays($daysUntil);
 
         return [
             'estimated_harvest_date' => $estimatedDate->toDateString(),
-            'days_until_harvest' => max(0, $daysUntil),
+            'days_until_harvest' => $daysUntil,
             'current_avg_weight_g' => round($currentAvgG, 2),
             'target_weight_g' => $targetWeightG,
             'growth_rate_used_g_per_day' => round($growthRateGPerDay, 2),
@@ -132,6 +145,7 @@ class HarvestEstimationService
             ];
         }
         usort($out, fn ($a, $b) => ($a['days_until_harvest'] ?? PHP_INT_MAX) <=> ($b['days_until_harvest'] ?? PHP_INT_MAX));
+
         return $out;
     }
 
@@ -157,6 +171,7 @@ class HarvestEstimationService
         usort($withAvg, fn ($a, $b) => strcmp($a['date'], $b['date']));
         $first = $withAvg[count($withAvg) - 2];
         $second = $withAvg[count($withAvg) - 1];
+
         return [$first['avg'], $first['date'], $second['avg'], $second['date']];
     }
 }
