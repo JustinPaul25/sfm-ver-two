@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\User;
+use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -14,10 +14,12 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             UserSeeder::class,
+            ClientProductionSeeder::class,
         ]);
 
         $this->command->info('Seeding complete.');
         $this->command->info('Admin: admin@sfm.com / admin123');
-        $this->command->info('Users: ' . User::count());
+        $this->command->info('Investors: pond1–pond11 / investor123 (or pond{N}@sfm.local)');
+        $this->command->info('Users: '.User::count());
     }
 }
