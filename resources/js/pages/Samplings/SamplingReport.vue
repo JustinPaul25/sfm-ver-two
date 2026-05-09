@@ -179,7 +179,9 @@ const formatTimestamp = (timestamp: string | null | undefined): string => {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
+      // Keep display consistent across local/dev/prod regardless of browser/server timezone.
+      timeZone: 'Asia/Manila',
     };
     
     return date.toLocaleString('en-US', options);

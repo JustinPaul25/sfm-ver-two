@@ -496,7 +496,7 @@ class ClientProductionSeeder extends Seeder
         $lastAt = $t->copy();
 
         for ($i = 1; $i <= $count; $i++) {
-            $weight = $this->jitterAbw($baseAbw, $scenario);
+            $weight = $this->generateValidatedTilapiaWeight($baseAbw, $scenario);
             [$lengthCm, $widthCm] = $this->approximateLengthWidthCm((float) $weight, $scenario);
 
             $sample = new Sample([
@@ -519,6 +519,58 @@ class ClientProductionSeeder extends Seeder
         }
 
         return $lastAt;
+    }
+
+    /**
+     * Generate realistic tilapia sample weight (grams) for the given scenario.
+     * Retries jitter until it fits stage bounds, then clamps as a final fallback.
+     */
+    private function generateValidatedTilapiaWeight(float $base, string $scenario): float
+    {
+        for ($try = 0; $try < 8; $try++) {
+            $candidate = $this->jitterAbw($base, $scenario);
+            if ($this->isTilapiaWeightValidForScenario($candidate, $scenario)) {
+                return $candidate;
+            }
+        }
+
+        // Final fallback keeps the value within stage limits even if all retries miss.
+        return $this->clampTilapiaWeightForScenario($base, $scenario);
+    }
+
+    /**
+     * Tilapia stage ranges in grams by scenario code.
+     */
+    private function isTilapiaWeightValidForScenario(float $weightG, string $scenario): bool
+    {
+        [$min, $max] = $this->tilapiaWeightBoundsForScenario($scenario);
+
+        return $weightG >= $min && $weightG <= $max;
+    }
+
+    private function clampTilapiaWeightForScenario(float $weightG, string $scenario): float
+    {
+        [$min, $max] = $this->tilapiaWeightBoundsForScenario($scenario);
+
+        return round(min($max, max($min, $weightG)), $scenario === 'F' ? 4 : 2);
+    }
+
+    /**
+     * [min,max] plausible tilapia weight bounds per scenario (grams).
+     */
+    private function tilapiaWeightBoundsForScenario(string $scenario): array
+    {
+        return match ($scenario) {
+            // Breeders / harvest-size adults
+            'B' => [300.0, 1_200.0],
+            // Fingerlings broadstock / juvenile
+            'FB' => [60.0, 350.0],
+            // Fingerlings early stage
+            'FI' => [1.5, 40.0],
+            // Fry
+            'F' => [0.02, 0.15],
+            default => [0.01, 1_500.0],
+        };
     }
 
     /**
