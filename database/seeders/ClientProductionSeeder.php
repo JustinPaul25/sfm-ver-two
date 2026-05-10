@@ -332,7 +332,8 @@ class ClientProductionSeeder extends Seeder
     }
 
     /**
-     * One login per investor; username pond{N}; display name matches investor record for linkage in the app.
+     * One login per investor; username pond{N}; keep account display name distinct
+     * from investor name to avoid duplicate-name rendering in sampling/report screens.
      *
      * @param  list<Investor>  $investors
      */
@@ -341,7 +342,7 @@ class ClientProductionSeeder extends Seeder
         foreach ($investors as $i => $investor) {
             $n = $i + 1;
             $user = User::create([
-                'name' => $investor->name,
+                'name' => 'Fish Farmer POND '.$n,
                 'username' => 'pond'.$n,
                 'email' => 'pond'.$n.'@example.invalid',
                 'password' => Hash::make('investor123'),

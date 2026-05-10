@@ -85,7 +85,13 @@ const printReport = () => {
 
 // Computed properties for better data display
 const formattedSamplings = computed(() => {
-  return props.samplings.map(sampling => {
+  // Guard against duplicate rows from joins by keeping the first occurrence per sampling id.
+  const uniqueSamplings = props.samplings.filter((sampling, index, arr) => {
+    if (!sampling?.id) return true;
+    return arr.findIndex((item) => item?.id === sampling.id) === index;
+  });
+
+  return uniqueSamplings.map(sampling => {
     const samples = sampling.samples || [];
     const sampleCount = samples.length;
     const totalWeight = samples.reduce((sum: number, sample: any) => sum + (sample.weight || 0), 0);
@@ -96,10 +102,10 @@ const formattedSamplings = computed(() => {
     return {
       ...sampling,
       sampleCount,
-      totalWeight,
+      totalWeight: Math.round(totalWeight * 100) / 100,
       avgWeight: Math.round(avgWeight * 100) / 100,
-      minWeight,
-      maxWeight,
+      minWeight: Math.round(minWeight * 100) / 100,
+      maxWeight: Math.round(maxWeight * 100) / 100,
       totalWeightKg: Math.round((totalWeight / 1000) * 100) / 100,
     };
   });
@@ -110,8 +116,8 @@ const summaryStats = computed(() => [
   { label: 'Total Samples', value: props.summary.total_samples, unit: 'pcs', color: 'text-green-600' },
   { label: 'Average Weight', value: Math.round(props.summary.avg_weight * 100) / 100, unit: 'g', color: 'text-purple-600' },
   { label: 'Total Weight', value: Math.round(props.summary.total_weight_kg * 100) / 100, unit: 'kg', color: 'text-orange-600' },
-  { label: 'Min Weight', value: props.summary.min_weight, unit: 'g', color: 'text-red-600' },
-  { label: 'Max Weight', value: props.summary.max_weight, unit: 'g', color: 'text-indigo-600' },
+  { label: 'Min Weight', value: Math.round(props.summary.min_weight * 100) / 100, unit: 'g', color: 'text-red-600' },
+  { label: 'Max Weight', value: Math.round(props.summary.max_weight * 100) / 100, unit: 'g', color: 'text-indigo-600' },
   { label: 'Total Investors', value: props.summary.total_investors, unit: '', color: 'text-teal-600' },
   { label: 'Total Cages', value: props.summary.total_cages, unit: '', color: 'text-pink-600' },
 ]);
@@ -280,16 +286,16 @@ watch(filters, () => {
                   {{ sampling.sampleCount }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {{ sampling.totalWeight }}
+                  {{ sampling.totalWeight.toFixed(2) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {{ sampling.avgWeight }}
+                  {{ sampling.avgWeight.toFixed(2) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {{ sampling.minWeight }}
+                  {{ sampling.minWeight.toFixed(2) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                  {{ sampling.maxWeight }}
+                  {{ sampling.maxWeight.toFixed(2) }}
                 </td>
               </tr>
             </tbody>

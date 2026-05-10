@@ -76,7 +76,14 @@ const showDeleteDialog = ref(false);
 const deleteTargetId = ref<number|null>(null);
 const showEditDialog = ref(false);
 const editSampling = ref<Sampling | null>(null);
-const investors = computed(() => investorStore.investorsSelect as Investor[]);
+const investors = computed(() => {
+  // Prevent duplicate investor names/options when the API returns repeated entries.
+  const source = (investorStore.investorsSelect as Investor[]) || [];
+  return source.filter((investor, index, arr) => {
+    if (!investor?.id) return true;
+    return arr.findIndex((item) => item?.id === investor.id) === index;
+  });
+});
 const cages = ref<Cage[]>([]);
 const loadingCages = ref(false);
 

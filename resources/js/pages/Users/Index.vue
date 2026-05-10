@@ -438,7 +438,7 @@ onMounted(() => {
           <select v-model="roleFilter" @change="handleSearch" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
             <option value="">All Roles</option>
             <option value="farmer">Farmer</option>
-            <option value="investor">Investor</option>
+            <option value="investor">Fish Farmers</option>
             <option value="admin">Admin</option>
           </select>
           <select v-model="statusFilter" @change="handleSearch" class="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
@@ -460,7 +460,7 @@ onMounted(() => {
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Investor</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fish Farmers</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
               <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -485,7 +485,7 @@ onMounted(() => {
                   :class="getRoleBadgeClass(user.role)"
                 >
                   <option value="farmer">Farmer</option>
-                  <option value="investor">Investor</option>
+                  <option value="investor">Fish Farmers</option>
                   <option value="admin">Admin</option>
                 </select>
               </td>
@@ -674,7 +674,7 @@ onMounted(() => {
               :class="{ 'border-red-500': validationErrors.role }"
             >
               <option value="farmer">Farmer</option>
-              <option value="investor">Investor</option>
+              <option value="investor">Fish Farmers</option>
               <option value="admin">Admin</option>
             </select>
             <p v-if="validationErrors.role" class="text-xs text-red-500 mt-1">
@@ -740,7 +740,7 @@ onMounted(() => {
               </p>
             </div>
             <div class="flex flex-col gap-1">
-              <label for="investor_id" class="text-sm font-medium">Investor</label>
+              <label for="investor_id" class="text-sm font-medium">Fish Farmers</label>
               <select 
                 id="investor_id" 
                 v-model="newUser.investor_id" 
@@ -749,7 +749,7 @@ onMounted(() => {
                 :disabled="creatingUser"
                 :class="{ 'border-red-500': validationErrors.investor_id }"
               >
-                <option :value="null" disabled selected>Select an investor</option>
+                <option :value="null" disabled selected>Select fish farmer</option>
                 <option v-for="investor in investors" :key="investor.id" :value="investor.id">
                   {{ investor.name }}
                 </option>
@@ -816,14 +816,14 @@ onMounted(() => {
             />
           </div>
           <div v-if="editUser.role === 'farmer' || editUser.role === 'investor'" class="flex flex-col gap-1">
-            <label for="edit_investor_id" class="text-sm font-medium">Investor</label>
+            <label for="edit_investor_id" class="text-sm font-medium">Fish Farmers</label>
             <select
               id="edit_investor_id"
               v-model="editUser.investor_id"
               class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               required
             >
-              <option :value="null" disabled>Select an investor</option>
+              <option :value="null" disabled>Select fish farmer</option>
               <option v-for="inv in investors" :key="inv.id" :value="inv.id">
                 {{ inv.name }}
               </option>
