@@ -301,11 +301,13 @@ class UserController extends Controller
                     },
                 ],
                 'investor_id' => 'required|exists:investors,id',
+                'is_active' => ['required', 'boolean'],
             ]);
             $user->update([
                 'name' => $request->name,
                 'email' => $request->email,
                 'investor_id' => $request->investor_id,
+                'is_active' => $request->boolean('is_active'),
             ]);
         } elseif ($user->role === 'investor') {
             $request->validate([
@@ -319,11 +321,13 @@ class UserController extends Controller
                     Rule::unique('users', 'email')->ignore($user->id),
                 ],
                 'investor_id' => 'required|exists:investors,id',
+                'is_active' => ['required', 'boolean'],
             ]);
             $user->update([
                 'name' => $request->name,
                 'email' => $request->email,
                 'investor_id' => $request->investor_id,
+                'is_active' => $request->boolean('is_active'),
             ]);
         } else {
             $request->validate([
@@ -336,8 +340,13 @@ class UserController extends Controller
                     'max:255',
                     Rule::unique('users', 'email')->ignore($user->id),
                 ],
+                'is_active' => ['required', 'boolean'],
             ]);
-            $user->update($request->only(['name', 'email']));
+            $user->update([
+                'name' => $request->name,
+                'email' => $request->email,
+                'is_active' => $request->boolean('is_active'),
+            ]);
         }
 
         $user->load('investor');
