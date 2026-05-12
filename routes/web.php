@@ -121,6 +121,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     // ForecastingSimulationController (admin only)
     Route::get('forecasting/simulation', [ForecastingSimulationController::class, 'index'])->name('forecasting.simulation');
     Route::put('settings/system/harvest-settings', [SystemSettingsController::class, 'updateHarvestSettings'])->name('settings.system.harvest-settings');
+    Route::put('settings/system/sample-timestamp', [SystemSettingsController::class, 'updateSampleTimestamp'])->name('settings.system.sample-timestamp');
 });
 
 

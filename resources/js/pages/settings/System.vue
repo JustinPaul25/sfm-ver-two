@@ -30,7 +30,17 @@ const harvestForm = useForm({
   harvest_default_growth_rate_g_per_day: props.settings.harvest_default_growth_rate_g_per_day?.value ?? '3',
 });
 
+const sampleTimestampForm = useForm({
+  sample_tested_at: toDatetimeLocalValue(props.settings.sample_tested_at?.value ?? '2026-05-12 14:48:00'),
+});
+
 const isSubmittingHarvest = ref(false);
+const isSubmittingSampleTimestamp = ref(false);
+
+function toDatetimeLocalValue(value: string): string {
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  return normalized.slice(0, 16);
+}
 
 async function updateHarvestSettings() {
   isSubmittingHarvest.value = true;
@@ -66,6 +76,48 @@ async function updateHarvestSettings() {
     );
   } catch (error) {
     isSubmittingHarvest.value = false;
+    Swal.fire({
+      icon: 'error',
+      title: 'Error',
+      text: 'An unexpected error occurred.',
+      confirmButtonColor: '#d33',
+    });
+  }
+}
+
+async function updateSampleTimestamp() {
+  isSubmittingSampleTimestamp.value = true;
+  try {
+    router.put(
+      route('settings.system.sample-timestamp'),
+      {
+        sample_tested_at: sampleTimestampForm.sample_tested_at,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          Swal.fire({
+            icon: 'success',
+            title: 'Updated!',
+            text: 'Sample timestamps updated successfully.',
+            confirmButtonColor: '#3085d6',
+          });
+        },
+        onError: (errors) => {
+          Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: errors.sample_tested_at || 'Failed to update sample timestamps.',
+            confirmButtonColor: '#d33',
+          });
+        },
+        onFinish: () => {
+          isSubmittingSampleTimestamp.value = false;
+        },
+      }
+    );
+  } catch (error) {
+    isSubmittingSampleTimestamp.value = false;
     Swal.fire({
       icon: 'error',
       title: 'Error',
@@ -127,6 +179,35 @@ async function updateHarvestSettings() {
             <div class="flex justify-end">
               <Button @click="updateHarvestSettings" :disabled="isSubmittingHarvest">
                 {{ isSubmittingHarvest ? 'Saving...' : 'Save Harvest Settings' }}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Sample Timestamp Settings -->
+        <Card>
+          <CardHeader>
+            <CardTitle>Sample Timestamps</CardTitle>
+            <CardDescription>
+              Set the Tested At date and time shown for sample measurement rows in sampling reports
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <Label for="sample_tested_at">Sample tested at</Label>
+                <input
+                  id="sample_tested_at"
+                  v-model="sampleTimestampForm.sample_tested_at"
+                  type="datetime-local"
+                  class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <p class="text-xs text-muted-foreground">Updates created and updated timestamps for existing sample rows.</p>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <Button @click="updateSampleTimestamp" :disabled="isSubmittingSampleTimestamp">
+                {{ isSubmittingSampleTimestamp ? 'Applying...' : 'Apply Sample Timestamp' }}
               </Button>
             </div>
           </CardContent>

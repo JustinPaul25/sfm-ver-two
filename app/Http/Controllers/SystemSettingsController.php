@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Sample;
 use App\Models\SystemSetting;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -56,5 +58,31 @@ class SystemSettingsController extends Controller
         );
 
         return back()->with('success', 'Harvest settings updated successfully.');
+    }
+
+    /**
+     * Update the timestamp shown as Tested At for sample measurements.
+     */
+    public function updateSampleTimestamp(Request $request)
+    {
+        $request->validate([
+            'sample_tested_at' => 'required|date',
+        ]);
+
+        $testedAt = Carbon::parse($request->sample_tested_at);
+
+        Sample::query()->update([
+            'created_at' => $testedAt,
+            'updated_at' => $testedAt,
+        ]);
+
+        SystemSetting::set(
+            'sample_tested_at',
+            $testedAt->format('Y-m-d H:i:s'),
+            'string',
+            'Timestamp applied to sample measurement records'
+        );
+
+        return back()->with('success', 'Sample timestamps updated successfully.');
     }
 }
