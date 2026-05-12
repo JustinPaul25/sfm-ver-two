@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { type SharedData } from '@/types';
@@ -29,9 +29,20 @@ const showSwal = (options: Parameters<typeof Swal.fire>[0]) => {
       options.didOpen?.(popup);
     },
     didClose: () => {
-      document.body.style.pointerEvents = previousPointerEvents;
+      document.body.style.pointerEvents = '';
       options.didClose?.();
     },
+  });
+};
+
+const showToast = (options: Parameters<typeof Swal.fire>[0]) => {
+  return showSwal({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    ...options,
   });
 };
 
@@ -344,10 +355,13 @@ async function updateUser() {
     await fetchUsers();
     showEditDialog.value = false;
     editUser.value = null;
-    showSwal({ icon: 'success', title: 'User updated successfully!' });
+    await nextTick();
+    setTimeout(() => {
+      showToast({ icon: 'success', title: 'User updated successfully!' });
+    }, 100);
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to update user.';
-    showSwal({ icon: 'error', title: 'Error', text: message });
+    showToast({ icon: 'error', title: message });
   }
 }
 
