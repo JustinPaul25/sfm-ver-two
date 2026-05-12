@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Investor;
 use App\Models\User;
 use App\Notifications\UserCreatedNotification;
+use Illuminate\Database\Connection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -358,6 +359,137 @@ class UserController extends Controller
                 'admins' => $usersByRole['admin'] ?? 0,
             ],
         ]);
+    }
+
+    /**
+     * Download the current database as a SQL backup (admin only).
+     */
+    public function downloadDatabase()
+    {
+        $connection = DB::connection();
+        $driver = $connection->getDriverName();
+
+        if (! in_array($driver, ['mysql', 'mariadb', 'sqlite'], true)) {
+            return response()->json([
+                'message' => "Database downloads are not supported for the {$driver} driver.",
+            ], 422);
+        }
+
+        $databaseName = config("database.connections.{$connection->getName()}.database", config('app.name', 'database'));
+        $safeDatabaseName = Str::slug((string) pathinfo((string) $databaseName, PATHINFO_FILENAME)) ?: 'database';
+        $filename = $safeDatabaseName.'-backup-'.now()->format('Y-m-d-His').'.sql';
+
+        return response()->streamDownload(function () use ($connection, $driver, $databaseName) {
+            echo "-- SFM database backup\n";
+            echo '-- Database: '.(string) $databaseName."\n";
+            echo '-- Generated at: '.now()->toDateTimeString()."\n\n";
+
+            if (in_array($driver, ['mysql', 'mariadb'], true)) {
+                echo "SET FOREIGN_KEY_CHECKS=0;\n\n";
+            }
+
+            foreach ($this->databaseTables($connection, $driver) as $table) {
+                $this->writeTableDump($connection, $driver, $table);
+            }
+
+            if (in_array($driver, ['mysql', 'mariadb'], true)) {
+                echo "SET FOREIGN_KEY_CHECKS=1;\n";
+            }
+        }, $filename, [
+            'Content-Type' => 'application/sql',
+        ]);
+    }
+
+    private function databaseTables(Connection $connection, string $driver): array
+    {
+        if ($driver === 'sqlite') {
+            return collect($connection->select(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            ))->pluck('name')->all();
+        }
+
+        return collect($connection->select('SHOW FULL TABLES'))
+            ->filter(function (object $row) {
+                $values = array_values((array) $row);
+
+                return ($values[1] ?? null) === 'BASE TABLE';
+            })
+            ->map(function (object $row) {
+                return array_values((array) $row)[0];
+            })
+            ->all();
+    }
+
+    private function writeTableDump(Connection $connection, string $driver, string $table): void
+    {
+        $quotedTable = $this->quoteIdentifier($table, $driver);
+
+        echo "-- --------------------------------------------------------\n";
+        echo "-- Table structure for {$table}\n";
+        echo "DROP TABLE IF EXISTS {$quotedTable};\n";
+        echo $this->tableCreateStatement($connection, $driver, $table).";\n\n";
+
+        $rows = $connection->table($table)->orderByRaw('1')->cursor();
+        $hasRows = false;
+
+        foreach ($rows as $row) {
+            $hasRows = true;
+            $data = (array) $row;
+            $columns = collect(array_keys($data))
+                ->map(fn (string $column) => $this->quoteIdentifier($column, $driver))
+                ->implode(', ');
+            $values = collect(array_values($data))
+                ->map(fn (mixed $value) => $this->quoteValue($connection, $value))
+                ->implode(', ');
+
+            echo "INSERT INTO {$quotedTable} ({$columns}) VALUES ({$values});\n";
+        }
+
+        if ($hasRows) {
+            echo "\n";
+        }
+    }
+
+    private function tableCreateStatement(Connection $connection, string $driver, string $table): string
+    {
+        if ($driver === 'sqlite') {
+            $result = $connection->selectOne(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+                [$table]
+            );
+
+            return $result->sql;
+        }
+
+        $result = $connection->selectOne('SHOW CREATE TABLE '.$this->quoteIdentifier($table, $driver));
+
+        return (array_values((array) $result)[1] ?? '');
+    }
+
+    private function quoteIdentifier(string $identifier, string $driver): string
+    {
+        if ($driver === 'sqlite') {
+            return '"'.str_replace('"', '""', $identifier).'"';
+        }
+
+        return '`'.str_replace('`', '``', $identifier).'`';
+    }
+
+    private function quoteValue(Connection $connection, mixed $value): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        return $connection->getPdo()->quote((string) $value);
     }
 
     /**

@@ -15,6 +15,7 @@ import Card from '@/components/ui/card/Card.vue';
 import CardContent from '@/components/ui/card/CardContent.vue';
 import CardHeader from '@/components/ui/card/CardHeader.vue';
 import CardTitle from '@/components/ui/card/CardTitle.vue';
+import { Download } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
@@ -368,6 +369,21 @@ async function deleteUser() {
   }
 }
 
+async function downloadDatabase() {
+  const result = await Swal.fire({
+    icon: 'warning',
+    title: 'Download database backup?',
+    text: 'This file contains a full copy of the current database. Keep it secure.',
+    showCancelButton: true,
+    confirmButtonText: 'Download',
+    cancelButtonText: 'Cancel',
+  });
+
+  if (result.isConfirmed) {
+    window.location.href = '/users/database/download';
+  }
+}
+
 onMounted(() => {
   fetchUsers();
   fetchStatistics();
@@ -448,7 +464,13 @@ onMounted(() => {
           </select>
           <Button @click="handleSearch" variant="default">Search</Button>
         </div>
-        <Button @click="openCreateDialog" variant="secondary">Create User</Button>
+        <div class="flex gap-2 items-center">
+          <Button v-if="isAdmin" @click="downloadDatabase" variant="outline" class="gap-2">
+            <Download class="h-4 w-4" />
+            Download Database
+          </Button>
+          <Button @click="openCreateDialog" variant="secondary">Create User</Button>
+        </div>
       </div>
 
       <!-- Users Table -->
