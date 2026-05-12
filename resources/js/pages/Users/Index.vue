@@ -872,7 +872,14 @@ onMounted(() => {
     <!-- Edit User Dialog -->
     <Dialog v-model:open="showEditDialog" v-if="editUser">
       <DialogTrigger as-child />
-      <DialogContent>
+      <DialogContent
+        @interact-outside="(e) => {
+          const target = e.target as HTMLElement;
+          if (target?.closest('.swal2-container')) {
+            return;
+          }
+        }"
+      >
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
         </DialogHeader>
@@ -979,7 +986,14 @@ onMounted(() => {
     <!-- Delete Confirmation Dialog -->
     <Dialog v-model:open="showDeleteDialog">
       <DialogTrigger as-child />
-      <DialogContent>
+      <DialogContent
+        @interact-outside="(e) => {
+          const target = e.target as HTMLElement;
+          if (target?.closest('.swal2-container')) {
+            return;
+          }
+        }"
+      >
         <DialogHeader>
           <DialogTitle>Delete User</DialogTitle>
         </DialogHeader>
@@ -992,3 +1006,9 @@ onMounted(() => {
     </Dialog>
   </AppLayout>
 </template>
+
+<style>
+.swal2-container {
+  z-index: 99999;
+}
+</style>
