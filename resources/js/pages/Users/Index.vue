@@ -90,6 +90,12 @@ const showEditDialog = ref(false);
 const showDeleteDialog = ref(false);
 const deleteTargetId = ref<number|null>(null);
 const editUser = ref<User | null>(null);
+const updatingPassword = ref(false);
+const passwordErrors = ref<Record<string, string[]>>({});
+const passwordForm = ref({
+  password: '',
+  password_confirmation: '',
+});
 
 const newUser = ref({
   name: '',
@@ -298,6 +304,11 @@ function openEditDialog(user: User) {
     email: user.email ?? '',
     investor_id: user.investor_id ?? null,
   };
+  passwordForm.value = {
+    password: '',
+    password_confirmation: '',
+  };
+  passwordErrors.value = {};
   showEditDialog.value = true;
 }
 
@@ -345,6 +356,43 @@ async function toggleUserStatus(user: User) {
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to toggle user status.';
     Swal.fire({ icon: 'error', title: 'Error', text: message });
+  }
+}
+
+async function validateAccount(user: User) {
+  try {
+    await axios.post(`/users/${user.id}/validate-account`);
+    await fetchUsers();
+    await fetchStatistics();
+    Swal.fire({ icon: 'success', title: 'Account validated successfully!' });
+  } catch (error: any) {
+    const message = error?.response?.data?.message || 'Failed to validate account.';
+    Swal.fire({ icon: 'error', title: 'Error', text: message });
+  }
+}
+
+async function updatePassword() {
+  if (!editUser.value) return;
+
+  updatingPassword.value = true;
+  passwordErrors.value = {};
+
+  try {
+    await axios.put(`/users/${editUser.value.id}/password`, passwordForm.value);
+    passwordForm.value = {
+      password: '',
+      password_confirmation: '',
+    };
+    Swal.fire({ icon: 'success', title: 'Password updated successfully!' });
+  } catch (error: any) {
+    if (error?.response?.status === 422 && error?.response?.data?.errors) {
+      passwordErrors.value = error.response.data.errors;
+    } else {
+      const message = error?.response?.data?.message || 'Failed to update password.';
+      Swal.fire({ icon: 'error', title: 'Error', text: message });
+    }
+  } finally {
+    updatingPassword.value = false;
   }
 }
 
@@ -544,6 +592,16 @@ onMounted(() => {
                     class="w-8 h-8 p-0"
                   >
                     {{ user.is_active ? '🔒' : '🔓' }}
+                  </Button>
+                  <Button
+                    v-if="!user.is_active"
+                    variant="default"
+                    size="sm"
+                    @click="validateAccount(user)"
+                    title="Validate Account"
+                    class="w-8 h-8 p-0"
+                  >
+                    ✅
                   </Button>
                   <Button 
                     variant="destructive" 
@@ -853,6 +911,47 @@ onMounted(() => {
             <p v-if="editUser.role === 'farmer'" class="text-xs text-muted-foreground">
               The investor (pond / site) this user is associated with
             </p>
+          </div>
+          <div class="border-t pt-4 mt-2">
+            <div class="text-sm font-medium mb-3">Update Password</div>
+            <div class="flex flex-col gap-3">
+              <div class="flex flex-col gap-1">
+                <label for="edit_password" class="text-sm font-medium">New Password</label>
+                <Input
+                  id="edit_password"
+                  v-model="passwordForm.password"
+                  type="password"
+                  placeholder="Enter new password"
+                  autocomplete="new-password"
+                  :disabled="updatingPassword"
+                  :class="{ 'border-red-500': passwordErrors.password }"
+                />
+                <p v-if="passwordErrors.password" class="text-xs text-red-500 mt-1">
+                  {{ passwordErrors.password[0] }}
+                </p>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label for="edit_password_confirmation" class="text-sm font-medium">Confirm New Password</label>
+                <Input
+                  id="edit_password_confirmation"
+                  v-model="passwordForm.password_confirmation"
+                  type="password"
+                  placeholder="Confirm new password"
+                  autocomplete="new-password"
+                  :disabled="updatingPassword"
+                />
+              </div>
+              <div class="flex justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  :disabled="updatingPassword || !passwordForm.password || !passwordForm.password_confirmation"
+                  @click="updatePassword"
+                >
+                  {{ updatingPassword ? 'Updating Password...' : 'Update Password' }}
+                </Button>
+              </div>
+            </div>
           </div>
           <DialogFooter class="flex justify-end gap-2 mt-4">
             <Button type="button" variant="secondary" @click="showEditDialog = false">Cancel</Button>

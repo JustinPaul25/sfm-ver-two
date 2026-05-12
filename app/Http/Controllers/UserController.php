@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 
 class UserController extends Controller
@@ -235,6 +236,40 @@ class UserController extends Controller
         return response()->json([
             'message' => "User {$status} successfully",
             'user' => $user,
+        ]);
+    }
+
+    public function validateAccount(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return response()->json([
+                'message' => 'Your own account is already validated',
+            ], 403);
+        }
+
+        $user->update([
+            'is_active' => true,
+            'email_verified_at' => $user->email ? ($user->email_verified_at ?? now()) : null,
+        ]);
+
+        return response()->json([
+            'message' => 'User account validated successfully',
+            'user' => $user->load('investor'),
+        ]);
+    }
+
+    public function updatePassword(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'password' => ['required', Password::defaults(), 'confirmed'],
+        ]);
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'message' => 'User password updated successfully',
         ]);
     }
 

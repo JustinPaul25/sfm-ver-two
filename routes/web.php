@@ -111,6 +111,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('users', [UserController::class, 'store'])->name('users.store');
     Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::put('users/{user}/role', [UserController::class, 'updateRole'])->name('users.update-role');
+    Route::put('users/{user}/password', [UserController::class, 'updatePassword'])->name('users.update-password');
+    Route::post('users/{user}/validate-account', [UserController::class, 'validateAccount'])->name('users.validate-account');
     Route::post('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
     Route::post('users/{user}/link-investor', [UserController::class, 'linkInvestor'])->name('users.link-investor');
