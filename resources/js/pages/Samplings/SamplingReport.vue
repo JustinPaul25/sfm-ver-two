@@ -39,7 +39,7 @@ const editTimestampSaving = ref(false);
 const editCreatedAt = ref('');
 const editUpdatedAt = ref('');
 const editSampleRows = ref<
-  { id: number; sample_no: string | number; weight: string; length: string; width: string }[]
+  { id: number; sample_no: string | number; weight: string; length: string; width: string; created_at: string; updated_at: string }[]
 >([]);
 
 function toDatetimeLocalValue(timestamp: string | null | undefined): string {
@@ -59,6 +59,8 @@ function mapSamplesToEditRows(samples: any[]) {
       weight: s.weight > 0 ? String(s.weight) : '',
       length: s.length != null && s.length !== '' ? String(s.length) : '',
       width: s.width != null && s.width !== '' ? String(s.width) : '',
+      created_at: toDatetimeLocalValue(s.created_at),
+      updated_at: toDatetimeLocalValue(s.updated_at || s.created_at),
     }));
 }
 
@@ -96,6 +98,8 @@ async function saveEditSamples() {
         weight: row.weight === '' ? 0 : Math.max(0, parseFloat(row.weight) || 0),
         length: row.length === '' ? null : parseFloat(row.length),
         width: row.width === '' ? null : parseFloat(row.width),
+        created_at: row.created_at || null,
+        updated_at: row.updated_at || row.created_at || null,
       })),
     });
     showEditSamplesDialog.value = false;
@@ -459,7 +463,7 @@ const aiAverages = computed(() => {
         </div>
 
         <Dialog v-model:open="showEditSamplesDialog">
-          <DialogContent class="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent class="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit sampling data</DialogTitle>
             </DialogHeader>
@@ -493,6 +497,8 @@ const aiAverages = computed(() => {
                       <th class="px-3 py-2 text-left">Weight (g)</th>
                       <th class="px-3 py-2 text-left">Length (cm)</th>
                       <th class="px-3 py-2 text-left">Width (cm)</th>
+                      <th class="px-3 py-2 text-left">Tested At</th>
+                      <th class="px-3 py-2 text-left">Updated At</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -506,6 +512,12 @@ const aiAverages = computed(() => {
                       </td>
                       <td class="px-3 py-2">
                         <Input v-model="row.width" type="number" step="any" min="0" class="h-9" placeholder="—" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <Input v-model="row.created_at" type="datetime-local" class="h-9 min-w-44" />
+                      </td>
+                      <td class="px-3 py-2">
+                        <Input v-model="row.updated_at" type="datetime-local" class="h-9 min-w-44" />
                       </td>
                     </tr>
                   </tbody>

@@ -561,6 +561,8 @@ class SamplingController extends Controller
             'samples.*.weight' => 'nullable|numeric|min:0',
             'samples.*.length' => 'nullable|numeric|min:0',
             'samples.*.width' => 'nullable|numeric|min:0',
+            'samples.*.created_at' => 'nullable|date',
+            'samples.*.updated_at' => 'nullable|date',
         ]);
 
         if ($request->has('mortality')) {
@@ -577,11 +579,17 @@ class SamplingController extends Controller
                 ? round((float) $row['length'], 2) : null;
             $width = array_key_exists('width', $row) && $row['width'] !== null && $row['width'] !== ''
                 ? round((float) $row['width'], 2) : null;
+            $createdAt = array_key_exists('created_at', $row) && $row['created_at']
+                ? Carbon::parse($row['created_at']) : $sample->created_at;
+            $updatedAt = array_key_exists('updated_at', $row) && $row['updated_at']
+                ? Carbon::parse($row['updated_at']) : $createdAt;
 
             $sample->update([
                 'weight' => round($weight, 3),
                 'length' => $length,
                 'width' => $width,
+                'created_at' => $createdAt,
+                'updated_at' => $updatedAt,
             ]);
         }
 
