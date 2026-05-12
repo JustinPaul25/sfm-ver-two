@@ -14,12 +14,13 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             UserSeeder::class,
+            SamplingSeeder::class,
             // ClientProductionSeeder::class,
         ]);
 
         $this->command->info('Seeding complete.');
         $this->command->info('Admin: admin@sfm.com / admin123');
-        $this->command->info('Investors: pond1–pond11 / investor123 (dummy email pond{N}@example.invalid)');
+        $this->command->info('Sample farmers: farmer1-farmer11 / farmer123');
         $this->command->info('Users: '.User::count());
     }
 }
