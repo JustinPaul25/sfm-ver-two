@@ -19,6 +19,22 @@ import { Download } from 'lucide-vue-next';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
+const showSwal = (options: Parameters<typeof Swal.fire>[0]) => {
+  const previousPointerEvents = document.body.style.pointerEvents;
+
+  return Swal.fire({
+    ...options,
+    didOpen: (popup) => {
+      document.body.style.pointerEvents = 'auto';
+      options.didOpen?.(popup);
+    },
+    didClose: () => {
+      document.body.style.pointerEvents = previousPointerEvents;
+      options.didClose?.();
+    },
+  });
+};
+
 const page = usePage<SharedData>();
 const userRole = computed(() => page.props.auth?.user?.role || 'farmer');
 const isAdmin = computed(() => userRole.value === 'admin');
@@ -156,7 +172,7 @@ async function fetchUsers() {
     users.value = response.data.users;
   } catch (error) {
     console.error('Error fetching users:', error);
-    Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to load users.' });
+    showSwal({ icon: 'error', title: 'Error', text: 'Failed to load users.' });
   } finally {
     loading.value = false;
   }
@@ -271,7 +287,7 @@ async function createUser() {
     await fetchUsers();
     await fetchStatistics();
     showCreateDialog.value = false;
-    Swal.fire({
+    showSwal({
       icon: 'success',
       title: 'User created successfully!',
       text: data?.message ?? undefined,
@@ -291,7 +307,7 @@ async function createUser() {
     } else {
       // For non-validation errors, show SweetAlert
       const message = error?.response?.data?.message || 'Failed to create user.';
-      Swal.fire({ icon: 'error', title: 'Error', text: message });
+      showSwal({ icon: 'error', title: 'Error', text: message });
     }
   } finally {
     creatingUser.value = false;
@@ -328,10 +344,10 @@ async function updateUser() {
     await fetchUsers();
     showEditDialog.value = false;
     editUser.value = null;
-    Swal.fire({ icon: 'success', title: 'User updated successfully!' });
+    showSwal({ icon: 'success', title: 'User updated successfully!' });
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to update user.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    showSwal({ icon: 'error', title: 'Error', text: message });
   }
 }
 
@@ -340,10 +356,10 @@ async function updateUserRole(user: User, newRole: string) {
     await axios.put(`/users/${user.id}/role`, { role: newRole });
     await fetchUsers();
     await fetchStatistics();
-    Swal.fire({ icon: 'success', title: 'User role updated successfully!' });
+    showSwal({ icon: 'success', title: 'User role updated successfully!' });
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to update user role.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    showSwal({ icon: 'error', title: 'Error', text: message });
   }
 }
 
@@ -353,10 +369,10 @@ async function toggleUserStatus(user: User) {
     await fetchUsers();
     await fetchStatistics();
     const status = !user.is_active ? 'activated' : 'deactivated';
-    Swal.fire({ icon: 'success', title: `User ${status} successfully!` });
+    showSwal({ icon: 'success', title: `User ${status} successfully!` });
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to toggle user status.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    showSwal({ icon: 'error', title: 'Error', text: message });
   }
 }
 
@@ -365,10 +381,10 @@ async function validateAccount(user: User) {
     await axios.post(`/users/${user.id}/validate-account`);
     await fetchUsers();
     await fetchStatistics();
-    Swal.fire({ icon: 'success', title: 'Account validated successfully!' });
+    showSwal({ icon: 'success', title: 'Account validated successfully!' });
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to validate account.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    showSwal({ icon: 'error', title: 'Error', text: message });
   }
 }
 
@@ -384,13 +400,13 @@ async function updatePassword() {
       password: '',
       password_confirmation: '',
     };
-    Swal.fire({ icon: 'success', title: 'Password updated successfully!' });
+    showSwal({ icon: 'success', title: 'Password updated successfully!' });
   } catch (error: any) {
     if (error?.response?.status === 422 && error?.response?.data?.errors) {
       passwordErrors.value = error.response.data.errors;
     } else {
       const message = error?.response?.data?.message || 'Failed to update password.';
-      Swal.fire({ icon: 'error', title: 'Error', text: message });
+      showSwal({ icon: 'error', title: 'Error', text: message });
     }
   } finally {
     updatingPassword.value = false;
@@ -411,15 +427,15 @@ async function deleteUser() {
     await fetchStatistics();
     showDeleteDialog.value = false;
     deleteTargetId.value = null;
-    Swal.fire({ icon: 'success', title: 'User deleted successfully!' });
+    showSwal({ icon: 'success', title: 'User deleted successfully!' });
   } catch (error: any) {
     const message = error?.response?.data?.message || 'Failed to delete user.';
-    Swal.fire({ icon: 'error', title: 'Error', text: message });
+    showSwal({ icon: 'error', title: 'Error', text: message });
   }
 }
 
 async function downloadDatabase() {
-  const result = await Swal.fire({
+  const result = await showSwal({
     icon: 'warning',
     title: 'Download database backup?',
     text: 'This file contains a full copy of the current database. Keep it secure.',
