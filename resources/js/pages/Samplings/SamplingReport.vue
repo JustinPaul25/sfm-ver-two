@@ -34,9 +34,21 @@ const showEditSamplesDialog = ref(false);
 const editSamplesSaving = ref(false);
 const editSamplesLoading = ref(false);
 const editMortality = ref(0);
+const showEditTimestampDialog = ref(false);
+const editTimestampSaving = ref(false);
+const editCreatedAt = ref('');
+const editUpdatedAt = ref('');
 const editSampleRows = ref<
   { id: number; sample_no: string | number; weight: string; length: string; width: string }[]
 >([]);
+
+function toDatetimeLocalValue(timestamp: string | null | undefined): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function mapSamplesToEditRows(samples: any[]) {
   return [...samples]
@@ -98,6 +110,37 @@ async function saveEditSamples() {
     await Swal.fire({ icon: 'error', title: 'Error', text: detail });
   } finally {
     editSamplesSaving.value = false;
+  }
+}
+
+function openEditTimestampDialog() {
+  if (!props.sampling?.id || isInvestor.value) return;
+  editCreatedAt.value = toDatetimeLocalValue(props.sampling.created_at);
+  editUpdatedAt.value = toDatetimeLocalValue(props.sampling.updated_at || props.sampling.created_at);
+  showEditTimestampDialog.value = true;
+}
+
+async function saveEditTimestamps() {
+  const id = props.sampling?.id;
+  if (!id || !editCreatedAt.value) return;
+  editTimestampSaving.value = true;
+  try {
+    await axios.patch(route('samplings.update-timestamps', id), {
+      created_at: editCreatedAt.value,
+      updated_at: editUpdatedAt.value || editCreatedAt.value,
+    });
+    showEditTimestampDialog.value = false;
+    await Swal.fire({ icon: 'success', title: 'Saved', text: 'Sampling timestamps were updated.' });
+    router.reload({
+      only: ['sampling', 'cageEntry', 'samples', 'totals', 'history'],
+    });
+  } catch (e: any) {
+    const msg = e?.response?.data?.message || e?.message || 'Failed to save timestamps.';
+    const errors = e?.response?.data?.errors;
+    const detail = errors ? Object.values(errors).flat().join(' ') : msg;
+    await Swal.fire({ icon: 'error', title: 'Error', text: detail });
+  } finally {
+    editTimestampSaving.value = false;
   }
 }
 
@@ -387,6 +430,13 @@ const aiAverages = computed(() => {
             >
               ➕ Add Record
             </Button>
+            <Button
+              v-if="props.sampling?.id && !isInvestor"
+              variant="outline"
+              @click="openEditTimestampDialog"
+            >
+              🕒 Edit Timestamps
+            </Button>
             <Dialog v-model:open="showDetectionDialog">
               <DialogTrigger as-child>
                 <Button variant="default" @click="openDetectionCamera">🤖 AI Fish Detection</Button>
@@ -466,6 +516,38 @@ const aiAverages = computed(() => {
               <Button type="button" variant="secondary" @click="showEditSamplesDialog = false">Cancel</Button>
               <Button type="button" :disabled="editSamplesSaving || !editSampleRows.length" @click="saveEditSamples">
                 {{ editSamplesSaving ? 'Saving…' : 'Save' }}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="showEditTimestampDialog">
+          <DialogContent class="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit sampling timestamps</DialogTitle>
+            </DialogHeader>
+            <div class="flex flex-col gap-4">
+              <div class="flex flex-col gap-2">
+                <Label for="edit-created-at">Data Entered</Label>
+                <Input
+                  id="edit-created-at"
+                  v-model="editCreatedAt"
+                  type="datetime-local"
+                />
+              </div>
+              <div class="flex flex-col gap-2">
+                <Label for="edit-updated-at">Last Updated</Label>
+                <Input
+                  id="edit-updated-at"
+                  v-model="editUpdatedAt"
+                  type="datetime-local"
+                />
+              </div>
+            </div>
+            <DialogFooter class="mt-6 flex flex-row flex-wrap gap-2 sm:justify-end">
+              <Button type="button" variant="secondary" @click="showEditTimestampDialog = false">Cancel</Button>
+              <Button type="button" :disabled="editTimestampSaving || !editCreatedAt" @click="saveEditTimestamps">
+                {{ editTimestampSaving ? 'Saving…' : 'Save' }}
               </Button>
             </DialogFooter>
           </DialogContent>

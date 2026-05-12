@@ -7,6 +7,7 @@ use App\Models\Sample;
 use App\Models\Sampling;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -585,6 +586,40 @@ class SamplingController extends Controller
         }
 
         return response()->json(['message' => 'Sampling data saved successfully']);
+    }
+
+    public function updateTimestamps(Request $request, Sampling $sampling)
+    {
+        if (! $this->userCanEditSamplingReport($request, $sampling)) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'created_at' => 'required|date',
+            'updated_at' => 'nullable|date',
+        ]);
+
+        $createdAt = Carbon::parse($request->input('created_at'));
+        $updatedAt = $request->filled('updated_at')
+            ? Carbon::parse($request->input('updated_at'))
+            : $createdAt;
+
+        DB::transaction(function () use ($sampling, $createdAt, $updatedAt) {
+            Sampling::whereKey($sampling->id)->update([
+                'created_at' => $createdAt,
+                'updated_at' => $updatedAt,
+            ]);
+
+            $sampling->samples()->update([
+                'created_at' => $createdAt,
+                'updated_at' => $updatedAt,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Sampling and sample timestamps updated successfully',
+            'sampling' => $sampling->fresh('samples'),
+        ]);
     }
 
     private function userCanEditSamplingReport(Request $request, Sampling $sampling): bool
