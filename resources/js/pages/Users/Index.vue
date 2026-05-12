@@ -319,6 +319,7 @@ async function updateUser() {
     const body: Record<string, unknown> = {
       name: editUser.value.name,
       email: editUser.value.email || null,
+      is_active: editUser.value.is_active,
     };
     if (editUser.value.role === 'farmer' || editUser.value.role === 'investor') {
       body.investor_id = editUser.value.investor_id;
@@ -910,6 +911,20 @@ onMounted(() => {
             </select>
             <p v-if="editUser.role === 'farmer'" class="text-xs text-muted-foreground">
               The investor (pond / site) this user is associated with
+            </p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <label for="edit_is_active" class="text-sm font-medium">Verify User</label>
+            <select
+              id="edit_is_active"
+              v-model="editUser.is_active"
+              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <option :value="true">Verified / Active</option>
+              <option :value="false">Not Verified / Inactive</option>
+            </select>
+            <p class="text-xs text-muted-foreground">
+              Set whether this user account is verified and allowed to access the system
             </p>
           </div>
           <div class="border-t pt-4 mt-2">
