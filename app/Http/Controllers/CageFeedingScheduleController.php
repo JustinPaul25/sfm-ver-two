@@ -156,8 +156,9 @@ class CageFeedingScheduleController extends Controller
             ], 403);
         }
 
+        // Make fields optional for partial updates (e.g., from cage view)
         $request->validate([
-            'schedule_name' => 'required|string|max:255',
+            'schedule_name' => 'nullable|string|max:255',
             'feeding_time_1' => 'nullable|date_format:H:i',
             'feeding_time_2' => 'nullable|date_format:H:i',
             'feeding_time_3' => 'nullable|date_format:H:i',
@@ -166,28 +167,101 @@ class CageFeedingScheduleController extends Controller
             'feeding_amount_2' => 'nullable|numeric|min:0',
             'feeding_amount_3' => 'nullable|numeric|min:0',
             'feeding_amount_4' => 'nullable|numeric|min:0',
-            'frequency' => 'required|in:daily,twice_daily,thrice_daily,four_times_daily',
+            'frequency' => 'nullable|in:daily,twice_daily,thrice_daily,four_times_daily',
+            'total_daily_amount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
 
-        $schedule->update([
-            'schedule_name' => $request->schedule_name,
-            'feeding_time_1' => $request->feeding_time_1,
-            'feeding_time_2' => $request->feeding_time_2,
-            'feeding_time_3' => $request->feeding_time_3,
-            'feeding_time_4' => $request->feeding_time_4,
-            'feeding_amount_1' => $request->feeding_amount_1 ?? 0,
-            'feeding_amount_2' => $request->feeding_amount_2 ?? 0,
-            'feeding_amount_3' => $request->feeding_amount_3 ?? 0,
-            'feeding_amount_4' => $request->feeding_amount_4 ?? 0,
-            'frequency' => $request->frequency,
-            'notes' => $request->notes,
-        ]);
+        $updateData = [];
+
+        // Handle partial updates
+        if ($request->has('schedule_name')) {
+            $updateData['schedule_name'] = $request->schedule_name;
+        }
+        if ($request->has('notes')) {
+            $updateData['notes'] = $request->notes;
+        }
+
+        // If frequency is being changed, regenerate feeding times
+        if ($request->has('frequency') && $request->frequency !== $schedule->frequency) {
+            $newFrequency = $request->frequency;
+            $newTimes = $this->generateFeedingTimes($newFrequency);
+
+            // Update feeding times
+            $updateData['feeding_time_1'] = $newTimes[0] ?? null;
+            $updateData['feeding_time_2'] = $newTimes[1] ?? null;
+            $updateData['feeding_time_3'] = $newTimes[2] ?? null;
+            $updateData['feeding_time_4'] = $newTimes[3] ?? null;
+            $updateData['frequency'] = $newFrequency;
+
+            // If total_daily_amount is provided, redistribute it across new feeding times
+            if ($request->has('total_daily_amount')) {
+                $totalAmount = $request->total_daily_amount;
+                $timeCount = count($newTimes);
+                $amountPerFeeding = $timeCount > 0 ? round($totalAmount / $timeCount, 2) : 0;
+
+                $updateData['feeding_amount_1'] = $amountPerFeeding;
+                $updateData['feeding_amount_2'] = $timeCount >= 2 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_3'] = $timeCount >= 3 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_4'] = $timeCount >= 4 ? $amountPerFeeding : 0;
+            } else {
+                // Keep existing total amount but redistribute
+                $totalAmount = $schedule->total_daily_amount;
+                $timeCount = count($newTimes);
+                $amountPerFeeding = $timeCount > 0 ? round($totalAmount / $timeCount, 2) : 0;
+
+                $updateData['feeding_amount_1'] = $amountPerFeeding;
+                $updateData['feeding_amount_2'] = $timeCount >= 2 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_3'] = $timeCount >= 3 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_4'] = $timeCount >= 4 ? $amountPerFeeding : 0;
+            }
+        } else {
+            // If frequency not changed, update individual fields if provided
+            if ($request->has('feeding_time_1')) $updateData['feeding_time_1'] = $request->feeding_time_1;
+            if ($request->has('feeding_time_2')) $updateData['feeding_time_2'] = $request->feeding_time_2;
+            if ($request->has('feeding_time_3')) $updateData['feeding_time_3'] = $request->feeding_time_3;
+            if ($request->has('feeding_time_4')) $updateData['feeding_time_4'] = $request->feeding_time_4;
+            if ($request->has('feeding_amount_1')) $updateData['feeding_amount_1'] = $request->feeding_amount_1 ?? 0;
+            if ($request->has('feeding_amount_2')) $updateData['feeding_amount_2'] = $request->feeding_amount_2 ?? 0;
+            if ($request->has('feeding_amount_3')) $updateData['feeding_amount_3'] = $request->feeding_amount_3 ?? 0;
+            if ($request->has('feeding_amount_4')) $updateData['feeding_amount_4'] = $request->feeding_amount_4 ?? 0;
+            if ($request->has('frequency')) $updateData['frequency'] = $request->frequency;
+
+            // Handle total_daily_amount updates
+            if ($request->has('total_daily_amount')) {
+                $totalAmount = $request->total_daily_amount;
+                $frequency = $request->frequency ?? $schedule->frequency;
+                $timeCount = $this->getFrequencyTimeCount($frequency);
+                $amountPerFeeding = $timeCount > 0 ? round($totalAmount / $timeCount, 2) : 0;
+
+                $updateData['feeding_amount_1'] = $amountPerFeeding;
+                $updateData['feeding_amount_2'] = $timeCount >= 2 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_3'] = $timeCount >= 3 ? $amountPerFeeding : 0;
+                $updateData['feeding_amount_4'] = $timeCount >= 4 ? $amountPerFeeding : 0;
+            }
+        }
+
+        $schedule->update($updateData);
 
         return response()->json([
             'message' => 'Feeding schedule updated successfully',
             'schedule' => $schedule->load('cage'),
         ]);
+    }
+
+    private function getFrequencyTimeCount($frequency)
+    {
+        switch ($frequency) {
+            case 'four_times_daily':
+                return 4;
+            case 'thrice_daily':
+                return 3;
+            case 'twice_daily':
+                return 2;
+            case 'daily':
+            default:
+                return 1;
+        }
     }
 
     public function destroy(Request $request, CageFeedingSchedule $schedule)

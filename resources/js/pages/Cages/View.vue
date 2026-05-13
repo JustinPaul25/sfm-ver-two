@@ -136,6 +136,7 @@ const feedConsumptions = ref(props.feedConsumptions);
 const feedingSchedule = ref<FeedingSchedule | null>(props.feedingSchedule || null);
 const showAddDialog = ref(false);
 const showEditDialog = ref(false);
+const showEditScheduleDialog = ref(false);
 const editingConsumption = ref<FeedConsumption | null>(null);
 const loading = ref(false);
 const currentPage = ref(props.feedConsumptions.current_page || 1);
@@ -153,6 +154,13 @@ const newConsumption = ref({
 const editConsumption = ref({
   feed_amount: '',
   consumption_date: '',
+  notes: ''
+});
+
+// Form data for editing feeding schedule
+const editSchedule = ref({
+  frequency: '',
+  total_daily_amount: 0,
   notes: ''
 });
 
@@ -397,6 +405,43 @@ const openEditDialog = (consumption: FeedConsumption) => {
   showEditDialog.value = true;
 };
 
+const openEditScheduleDialog = () => {
+  if (!feedingSchedule.value) return;
+  
+  editSchedule.value = {
+    frequency: feedingSchedule.value.frequency || 'daily',
+    total_daily_amount: feedingSchedule.value.total_daily_amount || 0,
+    notes: feedingSchedule.value.notes || ''
+  };
+  showEditScheduleDialog.value = true;
+};
+
+const saveSchedule = async () => {
+  if (!feedingSchedule.value || !feedingSchedule.value.id) return;
+  
+  loading.value = true;
+  try {
+    await axios.put(`/cages/feeding-schedules/${feedingSchedule.value.id}`, editSchedule.value, {
+      onSuccess: () => {
+        showEditScheduleDialog.value = false;
+        // Refresh the page to get updated data
+        router.reload();
+      },
+      onError: (errors) => {
+        const errorMessage = errors.message || Object.values(errors)[0] || 'Error updating feeding schedule';
+        alert(errorMessage);
+      },
+      onFinish: () => {
+        loading.value = false;
+      }
+    });
+  } catch (error) {
+    console.error('Error updating feeding schedule:', error);
+    alert('Error updating feeding schedule');
+    loading.value = false;
+  }
+};
+
 const resetNewConsumption = () => {
   // Next day number from all records (paginated table only shows one page)
   const maxDay = props.feedConsumptionSummary.max_day_number ?? 0;
@@ -637,7 +682,10 @@ onMounted(() => {
         <div class="lg:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle>Feeding Schedule</CardTitle>
+              <div class="flex items-center justify-between">
+                <CardTitle>Feeding Schedule</CardTitle>
+                <Button v-if="!isInvestor && feedingSchedule" variant="outline" size="sm" @click="openEditScheduleDialog">Edit</Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div v-if="feedingSchedule" class="space-y-6">
@@ -802,5 +850,62 @@ onMounted(() => {
     </Dialog>
 
     <!-- Edit Cage Dialog removed - investors should not be able to edit cages -->
+
+    <!-- Edit Feeding Schedule Dialog -->
+    <Dialog v-model:open="showEditScheduleDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Feeding Schedule</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-4">
+          <div>
+            <Label for="edit-frequency">Feeding Frequency</Label>
+            <select
+              id="edit-frequency"
+              v-model="editSchedule.frequency"
+              class="input w-full rounded border p-2"
+              required
+            >
+              <option value="daily">Daily (1 feeding)</option>
+              <option value="twice_daily">Twice Daily (2 feedings)</option>
+              <option value="thrice_daily">Thrice Daily (3 feedings)</option>
+              <option value="four_times_daily">Four Times Daily (4 feedings)</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">
+              Changing frequency will update feeding times automatically:
+              <span v-if="editSchedule.frequency === 'daily'">09:00</span>
+              <span v-else-if="editSchedule.frequency === 'twice_daily'">08:00, 16:00</span>
+              <span v-else-if="editSchedule.frequency === 'thrice_daily'">07:00, 12:00, 17:00</span>
+              <span v-else-if="editSchedule.frequency === 'four_times_daily'">06:00, 10:00, 14:00, 18:00</span>
+            </p>
+          </div>
+          <div>
+            <Label for="edit-total-amount">Daily Feeding Amount (kg)</Label>
+            <Input
+              id="edit-total-amount"
+              v-model.number="editSchedule.total_daily_amount"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Enter total daily amount"
+            />
+          </div>
+          <div>
+            <Label for="edit-notes">Notes (Optional)</Label>
+            <Input
+              id="edit-notes"
+              v-model="editSchedule.notes"
+              placeholder="Enter any notes"
+            />
+          </div>
+        </div>
+        <DialogFooter class="flex justify-end gap-2 mt-4">
+          <Button type="button" variant="outline" @click="showEditScheduleDialog = false">Cancel</Button>
+          <Button type="button" @click="saveSchedule" :disabled="loading">
+            {{ loading ? 'Saving...' : 'Save Changes' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </AppLayout>
 </template> 
