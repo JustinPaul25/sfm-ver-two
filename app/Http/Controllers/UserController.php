@@ -369,8 +369,14 @@ class UserController extends Controller
             ], 403);
         }
 
-        // Delete related data first
-        $user->cages()->delete();
+        // Delete related data first (samples must be deleted before samplings,
+        // because samples.sampling_id lacks an ON DELETE CASCADE constraint)
+        foreach ($user->cages as $cage) {
+            foreach ($cage->samplings as $sampling) {
+                $sampling->samples()->delete();
+            }
+            $cage->delete();
+        }
 
         $user->delete();
 
