@@ -584,7 +584,7 @@ class SamplingController extends Controller
             $updatedAt = array_key_exists('updated_at', $row) && $row['updated_at']
                 ? Carbon::parse($row['updated_at']) : $createdAt;
 
-            $sample->update([
+            Sample::whereKey($sample->id)->update([
                 'weight' => round($weight, 3),
                 'length' => $length,
                 'width' => $width,
