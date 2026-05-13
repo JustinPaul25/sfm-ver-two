@@ -5,7 +5,7 @@ import Card from '@/components/ui/card/Card.vue';
 import Button from '@/components/ui/button/Button.vue';
 import Input from '@/components/ui/input/Input.vue';
 import Label from '@/components/ui/label/Label.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import axios from 'axios';
 import FishDetectionCamera from '@/components/FishDetectionCamera.vue';
 import Dialog from '@/components/ui/dialog/Dialog.vue';
@@ -48,6 +48,13 @@ function toDatetimeLocalValue(timestamp: string | null | undefined): string {
   if (isNaN(date.getTime())) return '';
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function datetimeLocalToUTC(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return null;
+  return date.toISOString();
 }
 
 function mapSamplesToEditRows(samples: any[]) {
@@ -98,8 +105,8 @@ async function saveEditSamples() {
         weight: row.weight === '' ? 0 : Math.max(0, parseFloat(row.weight) || 0),
         length: row.length === '' ? null : parseFloat(row.length),
         width: row.width === '' ? null : parseFloat(row.width),
-        created_at: row.created_at || null,
-        updated_at: row.updated_at || row.created_at || null,
+        created_at: datetimeLocalToUTC(row.created_at),
+        updated_at: datetimeLocalToUTC(row.updated_at || row.created_at),
       })),
     });
     showEditSamplesDialog.value = false;
@@ -130,8 +137,8 @@ async function saveEditTimestamps() {
   editTimestampSaving.value = true;
   try {
     await axios.patch(route('samplings.update-timestamps', id), {
-      created_at: editCreatedAt.value,
-      updated_at: editUpdatedAt.value || editCreatedAt.value,
+      created_at: datetimeLocalToUTC(editCreatedAt.value),
+      updated_at: datetimeLocalToUTC(editUpdatedAt.value || editCreatedAt.value),
     });
     showEditTimestampDialog.value = false;
     await Swal.fire({ icon: 'success', title: 'Saved', text: 'Sampling timestamps were updated.' });
@@ -184,6 +191,21 @@ const report = ref({
   },
   history: props.history || [],
 });
+
+// Keep report in sync when Inertia props reload
+watch(
+  () => [props.sampling, props.samples, props.totals, props.history],
+  () => {
+    report.value.date = props.sampling?.date || '';
+    report.value.investor = props.sampling?.investor || '';
+    report.value.cageNo = props.sampling?.cageNo || '';
+    report.value.doc = props.sampling?.doc || '';
+    report.value.samples = props.samples || [];
+    report.value.totals = props.totals || report.value.totals;
+    report.value.history = props.history || [];
+  },
+  { deep: true },
+);
 
 // Fish detection state
 const showDetectionDialog = ref(false);

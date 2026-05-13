@@ -52,14 +52,16 @@ const summaryCards = computed(() => [
         value: analytics.value.summary?.total_cages || 0,
         icon: '🏠',
         color: 'bg-blue-500',
-        description: 'Total cages'
+        change: analytics.value.growth_metrics?.cage_growth > 0 ? `+${analytics.value.growth_metrics?.cage_growth}%` : `${analytics.value.growth_metrics?.cage_growth}%`,
+        changeType: analytics.value.growth_metrics?.cage_growth > 0 ? 'positive' : 'negative'
     },
     {
         title: 'My Farmers',
         value: analytics.value.summary?.total_farmers || 0,
         icon: '👨‍🌾',
         color: 'bg-green-500',
-        description: 'Active farmers'
+        change: analytics.value.growth_metrics?.farmer_growth > 0 ? `+${analytics.value.growth_metrics?.farmer_growth}%` : `${analytics.value.growth_metrics?.farmer_growth}%`,
+        changeType: analytics.value.growth_metrics?.farmer_growth > 0 ? 'positive' : 'negative'
     },
     {
         title: 'Samplings This Period',

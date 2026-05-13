@@ -417,13 +417,54 @@ class DashboardController extends Controller
         $weightGrowth = $previousAvgWeight > 0 ? 
             (($currentAvgWeight - $previousAvgWeight) / $previousAvgWeight) * 100 : 0;
 
+        // Investor growth (new investors added in period vs previous period)
+        $currentInvestorsQuery = Investor::whereBetween('created_at', [$startDate, $endDate])
+            ->whereNull('deleted_at');
+        $previousInvestorsQuery = Investor::whereBetween('created_at', [$previousStart, $previousEnd])
+            ->whereNull('deleted_at');
+        
+        if ($user && $user->isInvestor()) {
+            $currentInvestorsQuery->where('id', $user->investor_id);
+            $previousInvestorsQuery->where('id', $user->investor_id);
+        }
+        
+        $currentInvestors = $currentInvestorsQuery->count();
+        $previousInvestors = $previousInvestorsQuery->count();
+        $investorGrowth = $previousInvestors > 0 ? 
+            (($currentInvestors - $previousInvestors) / $previousInvestors) * 100 : 0;
+
+        // Cage growth (new cages added in period vs previous period)
+        $currentCagesQuery = Cage::whereBetween('created_at', [$startDate, $endDate]);
+        $previousCagesQuery = Cage::whereBetween('created_at', [$previousStart, $previousEnd]);
+        
+        if ($user && $user->isInvestor()) {
+            $currentCagesQuery->where('investor_id', $user->investor_id);
+            $previousCagesQuery->where('investor_id', $user->investor_id);
+        }
+        
+        if ($user && $user->isFarmer()) {
+            $currentCagesQuery->where('farmer_id', $user->id);
+            $previousCagesQuery->where('farmer_id', $user->id);
+        }
+        
+        $currentCages = $currentCagesQuery->count();
+        $previousCages = $previousCagesQuery->count();
+        $cageGrowth = $previousCages > 0 ? 
+            (($currentCages - $previousCages) / $previousCages) * 100 : 0;
+
         return [
             'sampling_growth' => round($samplingGrowth, 2),
             'weight_growth' => round($weightGrowth, 2),
+            'investor_growth' => round($investorGrowth, 2),
+            'cage_growth' => round($cageGrowth, 2),
             'current_samplings' => $currentSamplings,
             'previous_samplings' => $previousSamplings,
             'current_avg_weight' => round($currentAvgWeight, 2),
             'previous_avg_weight' => round($previousAvgWeight, 2),
+            'current_investors' => $currentInvestors,
+            'previous_investors' => $previousInvestors,
+            'current_cages' => $currentCages,
+            'previous_cages' => $previousCages,
         ];
     }
 

@@ -329,13 +329,48 @@ class InvestorDashboardController extends Controller
         $weightGrowth = $previousAvgWeight > 0 ? 
             (($currentAvgWeight - $previousAvgWeight) / $previousAvgWeight) * 100 : 0;
 
+        // Cage growth (new cages added in period vs previous period)
+        $currentCagesQuery = Cage::where('investor_id', $investorId)
+            ->whereBetween('created_at', [$startDate, $endDate]);
+        $previousCagesQuery = Cage::where('investor_id', $investorId)
+            ->whereBetween('created_at', [$previousStart, $previousEnd]);
+        
+        if ($cageNo) {
+            $currentCagesQuery->where('id', $cageNo);
+            $previousCagesQuery->where('id', $cageNo);
+        }
+        
+        $currentCages = $currentCagesQuery->count();
+        $previousCages = $previousCagesQuery->count();
+        $cageGrowth = $previousCages > 0 ? 
+            (($currentCages - $previousCages) / $previousCages) * 100 : 0;
+
+        // Farmer growth (new farmers added in period vs previous period)
+        $currentFarmersQuery = User::where('investor_id', $investorId)
+            ->where('role', 'farmer')
+            ->whereBetween('created_at', [$startDate, $endDate]);
+        $previousFarmersQuery = User::where('investor_id', $investorId)
+            ->where('role', 'farmer')
+            ->whereBetween('created_at', [$previousStart, $previousEnd]);
+        
+        $currentFarmers = $currentFarmersQuery->count();
+        $previousFarmers = $previousFarmersQuery->count();
+        $farmerGrowth = $previousFarmers > 0 ? 
+            (($currentFarmers - $previousFarmers) / $previousFarmers) * 100 : 0;
+
         return [
             'sampling_growth' => round($samplingGrowth, 2),
             'weight_growth' => round($weightGrowth, 2),
+            'cage_growth' => round($cageGrowth, 2),
+            'farmer_growth' => round($farmerGrowth, 2),
             'current_samplings' => $currentSamplings,
             'previous_samplings' => $previousSamplings,
             'current_avg_weight' => round($currentAvgWeight, 2),
             'previous_avg_weight' => round($previousAvgWeight, 2),
+            'current_cages' => $currentCages,
+            'previous_cages' => $previousCages,
+            'current_farmers' => $currentFarmers,
+            'previous_farmers' => $previousFarmers,
         ];
     }
 

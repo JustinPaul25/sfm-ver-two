@@ -57,16 +57,16 @@ const summaryCards = computed(() => [
         value: analytics.value.summary?.total_investors || 0,
         icon: '👥',
         color: 'bg-blue-500',
-        change: '+12%',
-        changeType: 'positive'
+        change: analytics.value.growth_metrics?.investor_growth > 0 ? `+${analytics.value.growth_metrics?.investor_growth}%` : `${analytics.value.growth_metrics?.investor_growth}%`,
+        changeType: analytics.value.growth_metrics?.investor_growth > 0 ? 'positive' : 'negative'
     },
     {
         title: 'Total Cages',
         value: analytics.value.summary?.total_cages || 0,
         icon: '🏠',
         color: 'bg-green-500',
-        change: '+5%',
-        changeType: 'positive'
+        change: analytics.value.growth_metrics?.cage_growth > 0 ? `+${analytics.value.growth_metrics?.cage_growth}%` : `${analytics.value.growth_metrics?.cage_growth}%`,
+        changeType: analytics.value.growth_metrics?.cage_growth > 0 ? 'positive' : 'negative'
     },
     {
         title: 'Samplings This Period',
