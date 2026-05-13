@@ -23,6 +23,20 @@ class AdditionalSamplingSeeder extends Seeder
             // Get all investors (IDs 2-13, excluding 6 based on the image)
             $investors = Investor::whereIn('id', [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13])->get();
 
+            // Clean up existing samples and samplings for these investors
+            $this->command->info('Cleaning up existing samples and samplings...');
+            
+            foreach ($investors as $investor) {
+                // Delete samples associated with this investor's samplings
+                $samplingIds = Sampling::where('investor_id', $investor->id)->pluck('id');
+                Sample::whereIn('sampling_id', $samplingIds)->delete();
+                
+                // Delete samplings for this investor
+                Sampling::where('investor_id', $investor->id)->delete();
+                
+                $this->command->info("Cleaned data for investor: {$investor->name} (ID: {$investor->id})");
+            }
+
             // Define sampling dates: 2 per month for March, April, May
             $samplingDates = [
                 ['2026-03-20', '2026-03-27'],  // March
