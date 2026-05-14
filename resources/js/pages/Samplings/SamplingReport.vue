@@ -456,13 +456,6 @@ const aiAverages = computed(() => {
             >
               ➕ Add Record
             </Button>
-            <Button
-              v-if="props.sampling?.id && !isInvestor"
-              variant="outline"
-              @click="openEditTimestampDialog"
-            >
-              🕒 Edit Timestamps
-            </Button>
             <Dialog v-model:open="showDetectionDialog">
               <DialogTrigger as-child>
                 <Button variant="default" @click="openDetectionCamera">🤖 AI Fish Detection</Button>
@@ -519,8 +512,6 @@ const aiAverages = computed(() => {
                       <th class="px-3 py-2 text-left">Weight (g)</th>
                       <th class="px-3 py-2 text-left">Length (cm)</th>
                       <th class="px-3 py-2 text-left">Width (cm)</th>
-                      <th class="px-3 py-2 text-left">Tested At</th>
-                      <th class="px-3 py-2 text-left">Updated At</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -534,12 +525,6 @@ const aiAverages = computed(() => {
                       </td>
                       <td class="px-3 py-2">
                         <Input v-model="row.width" type="number" step="any" min="0" class="h-9" placeholder="—" />
-                      </td>
-                      <td class="px-3 py-2">
-                        <Input v-model="row.created_at" type="datetime-local" class="h-9 min-w-44" />
-                      </td>
-                      <td class="px-3 py-2">
-                        <Input v-model="row.updated_at" type="datetime-local" class="h-9 min-w-44" />
                       </td>
                     </tr>
                   </tbody>
